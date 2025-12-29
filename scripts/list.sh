@@ -2,7 +2,7 @@
 
 echo "📋 Available repositories for testing:"
 echo "========================================"
-python3 -c "
+uv run python -c "
 import json
 try:
     with open('prompts/repos.json') as f:
@@ -22,4 +22,4 @@ echo "Usage: mise test [repository_name]"
 echo "Examples:"
 echo "  mise test                    # Use default"
 echo "  mise test hello-world        # Use hello-world"
-echo "  mise test https://github.com/user/repo  # Use direct URL" 
+echo "  mise test https://github.com/user/repo  # Use direct URL"

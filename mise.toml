@@ -76,13 +76,13 @@ dev-server = "temporal server start-dev"
 # Run the Temporal worker
 # Starts the Temporal worker process to execute workflow activities
 # Use when: running workflows locally, testing worker functionality, or processing investigation tasks
-dev-worker = "cd src && mise exec python@3.12 -- python -m investigate_worker"
+dev-worker = "cd src && uv run python -m investigate_worker"
 
 # Run the workflow client
 # Executes the main client to trigger and manage workflows
 # Defaults to chunk-size 2 for conservative parallel processing
 # Use when: manually triggering workflows, testing workflow initiation, or managing running workflows
-dev-client = "cd src && python -m client investigate --chunk-size=2"
+dev-client = "cd src && uv run python -m client investigate --chunk-size=2"
 
 # Kill all Temporal servers and workers
 # Stops all running Temporal processes and workers
@@ -169,7 +169,7 @@ test-all = { depends = ["test-units", "test-integration"] }
 # Use when: quick feedback on code changes, isolated testing of components, or during active development
 test-units = """
     echo "🧪 Running unit tests..." && \
-    mise exec python@3.12 -- python -m pytest tests/unit -v --tb=short
+    uv run python -m pytest tests/unit -v --tb=short
 """
 
 # Run integration tests
@@ -177,7 +177,7 @@ test-units = """
 # Use when: testing component interactions, verifying system integration, or before deployments
 test-integration = """
     echo "🔗 Running integration tests..." && \
-    mise exec python@3.12 -- python -m pytest tests/integration -v --tb=short -m "not slow"
+    uv run python -m pytest tests/integration -v --tb=short -m "not slow"
 """
 
 # Run all tests (unit + integration)
@@ -185,7 +185,7 @@ test-integration = """
 # Use when: comprehensive validation, pre-release testing, or investigating test failures across the entire suite
 test-complete = """
     echo "🧪 Running all tests (unit + integration)..." && \
-    mise exec python@3.12 -- python -m pytest tests/ -v --tb=short
+    uv run python -m pytest tests/ -v --tb=short
 """
 
 # List available repositories for testing
@@ -199,7 +199,7 @@ dev-repos-list = "scripts/list.sh"
 # Use when: refreshing repository list, adding new repositories to analysis, or keeping repository data current
 dev-repos-update = """
     echo "🔄 Updating repos.json with latest repositories..." && \
-    mise exec python@3.12 -- python scripts/update_repos.py && \
+    uv run python scripts/update_repos.py && \
     echo "✨ Repository list updated successfully!"
 """
 
@@ -489,7 +489,7 @@ verify-config = """
     fi && \
     uv sync 2>/dev/null || echo "Dependencies already installed" && \
     uv add rich requests 2>/dev/null || echo "Rich library not available, using plain text tables" && \
-    mise exec python@3.12 -- python scripts/verify_config.py
+    uv run python scripts/verify_config.py
 """
 
 # Test DynamoDB functionality locally
@@ -502,7 +502,7 @@ verify-config = """
 test-dynamodb = """
     echo "🧪 Testing DynamoDB functionality..." && \
     uv sync --extra dev 2>/dev/null || echo "Dependencies already installed" && \
-    mise exec python@3.12 -- python test_dynamodb_local.py $@
+    uv run python test_dynamodb_local.py $@
 """
 
 # Test DynamoDB with real AWS (shortcut for common use case)
@@ -510,7 +510,7 @@ test-dynamodb = """
 # Use when: validating production AWS setup, testing real cloud connectivity, or verifying deployment credentials
 test-dynamodb-aws = """
     echo "🧪 Testing DynamoDB with real AWS credentials..." && \
-    mise exec python@3.12 -- python test_dynamodb_local.py --real-aws --table-name dev-repo-swarm-results
+    uv run python test_dynamodb_local.py --real-aws --table-name dev-repo-swarm-results
 """
 
 # Integration test using real DynamoDB table with investigator components
@@ -519,7 +519,7 @@ test-dynamodb-aws = """
 test-dynamodb-integration = """
     echo "🧪 Running DynamoDB integration test with investigator components..." && \
     uv sync 2>/dev/null || echo "Dependencies already installed" && \
-    mise exec python@3.12 -- python test_dynamodb_integration.py
+    uv run python test_dynamodb_integration.py
 """
 
 # Test workflow caching logic
@@ -527,7 +527,7 @@ test-dynamodb-integration = """
 # Use when: testing caching mechanisms, debugging persistence issues, or verifying workflow state management
 test-workflow-cache = """
     echo "🧪 Testing workflow caching logic..." && \
-    mise exec python@3.12 -- python test_workflow_cache_simple.py
+    uv run python test_workflow_cache_simple.py
 """
 
 # Test DynamoDB health check
@@ -535,7 +535,7 @@ test-workflow-cache = """
 # Use when: monitoring system health, debugging connectivity issues, or validating database availability
 test-health-check = """
     echo "🧪 Testing DynamoDB health check..." && \
-    mise exec python@3.12 -- python test_health_check.py
+    uv run python test_health_check.py
 """
 
 # Run the investigate repositories workflow using Docker container

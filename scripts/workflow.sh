@@ -8,11 +8,11 @@ mise run dev-temporal &
 SERVER_PID=$!
 sleep 5
 
-cd src && python -m investigate_worker &
+cd src && uv run python -m investigate_worker &
 WORKER_PID=$!
 sleep 2
 
-cd src && python -m client investigate
+cd src && uv run python -m client investigate
 
 kill $WORKER_PID
 kill $SERVER_PID
