@@ -50,7 +50,7 @@
 
 [tools]
 python = "3.12"
-temporal = "latest"
+"asdf:asdf-community/asdf-temporal" = "latest" # Temporal CLI via asdf backend
 uv = "latest"
 
 [env]
@@ -70,7 +70,8 @@ dev-dependencies = "uv sync"
 # Start Temporal server
 # Launches the Temporal development server for workflow orchestration
 # Use when: setting up local development environment, starting workflows, or testing Temporal-based functionality
-dev-server = "temporal server start-dev"
+dev-temporal = "temporal server start-dev"
+dev-server = "temporal server start-dev"   # Alias for backward compatibility
 
 
 # Run the Temporal worker
