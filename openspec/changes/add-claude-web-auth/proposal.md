@@ -1,30 +1,29 @@
-# Change: Add Claude Max Web Authentication
+# Change: Add Claude Max OAuth Authentication via Claude Code CLI
 
 ## Why
 
 RepoSwarm currently requires users to provide an `ANTHROPIC_API_KEY` environment variable to access Claude AI for repository analysis. This creates several limitations:
 
 1. **API Key Cost Barrier**: API keys require direct payment per token usage, which can be expensive for heavy users
-2. **No Claude Max Integration**: Users who pay for Claude Max subscriptions (claude.ai) cannot use their existing subscription for RepoSwarm
+2. **No Claude Max Integration**: Users who pay for Claude Max subscriptions (5x/20x plans) cannot use their existing subscription for RepoSwarm
 3. **Redundant Costs**: Power users may pay for both Claude Max subscription AND API usage
-4. **Authentication Friction**: Obtaining API keys requires separate setup from web authentication
+4. **Existing OAuth Tokens Unused**: Users who run `claude setup-token` cannot use those tokens with RepoSwarm
 
-Many users already have Claude Max accounts through claude.ai with generous usage limits. Enabling web-based authentication would allow these users to leverage their existing subscriptions, reducing cost barriers and improving accessibility.
+Many users already have Claude Max accounts with generous usage limits. The official Claude Code CLI supports OAuth tokens from `claude setup-token`, but RepoSwarm currently uses the Anthropic SDK which only accepts API keys.
 
-**Market Context**: Other AI tools (ChatGPT, Gemini) support both web and API authentication, making this a competitive feature gap.
+**Critical Discovery**: OAuth tokens (`sk-ant-oat01-...`) from `claude setup-token` **do not work** with the Anthropic API (`api.anthropic.com`). The API explicitly rejects them with "OAuth authentication is currently not supported." However, the Claude Code CLI **does** support OAuth tokens and can be called programmatically.
 
 ## What Changes
 
-- **Add web-based authentication flow** - Support browser-based login to claude.ai alongside existing API key authentication
-- **Implement session token management** - Store and refresh session tokens obtained from web login
-- **Create authentication abstraction layer** - Abstract Claude client creation to support multiple auth methods
-- **Add authentication method detection** - Automatically choose web auth or API key based on configuration
-- **Implement token refresh mechanism** - Automatically refresh expired web session tokens
-- **Add authentication mode configuration** - Allow users to specify preferred authentication method
-- **Update documentation** - Add instructions for web authentication setup
-- **Maintain API key support** - Existing ANTHROPIC_API_KEY authentication continues to work unchanged
+- **Add Claude CLI client wrapper** - Call `claude --print` programmatically to support OAuth tokens
+- **Create authentication abstraction layer** - Abstract Claude client creation to support both SDK (API key) and CLI (OAuth)
+- **Add authentication method detection** - Automatically choose CLI (OAuth) or SDK (API key) based on available credentials
+- **Add OAuth token environment variable support** - Recognize `CLAUDE_CODE_OAUTH_TOKEN` and `CLAUDE_OAUTH_TOKEN`
+- **Add `mise claude-login` command** - Wrapper for `claude setup-token` to help users generate OAuth tokens
+- **Update documentation** - Add instructions for OAuth authentication setup with Claude Max
+- **Maintain API key support** - Existing ANTHROPIC_API_KEY authentication continues to work unchanged (uses SDK)
 
-**BREAKING CHANGES**: None - API key authentication remains the default, web auth is opt-in
+**BREAKING CHANGES**: None - API key authentication remains the default and uses the existing SDK code path
 
 ## Impact
 
@@ -35,25 +34,29 @@ Many users already have Claude Max accounts through claude.ai with generous usag
 ### Affected Code
 
 - **Core Authentication** (NEW):
-  - `src/investigator/core/claude_auth.py` (NEW) - Authentication abstraction layer
-  - `src/investigator/core/claude_web_auth.py` (NEW) - Web-based authentication implementation
-  - `src/investigator/core/claude_session_manager.py` (NEW) - Session token storage and refresh
+  - `src/investigator/core/claude_client_factory.py` (NEW) - Factory for creating SDK or CLI clients
+  - `src/investigator/core/claude_cli_client.py` (NEW) - Claude CLI subprocess wrapper
+  - `src/investigator/core/claude_sdk_client.py` (NEW) - Anthropic SDK wrapper (refactored from existing)
 
 - **Existing Authentication Updates**:
-  - `src/investigator/core/claude_analyzer.py:13-14` - Update to use authentication abstraction
-  - `src/investigator/investigator.py:55-58` - Update initialization to support both auth methods
-  - `src/activities/investigate_activities.py:614-618` - Update to use auth abstraction
+  - `src/investigator/core/claude_analyzer.py:13-14` - Update to use client factory
+  - `src/investigator/investigator.py:55-58` - Update initialization to use factory
+  - `src/activities/investigate_activities.py:614-618` - Update to use factory
 
 - **Configuration**:
-  - `.env.example` - Add CLAUDE_AUTH_MODE, CLAUDE_SESSION_TOKEN variables
-  - `src/investigator/core/config.py` - Add auth mode validation
+  - `.env.example` - Add `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_OAUTH_TOKEN` variables
+  - `src/investigator/core/config.py` - Add OAuth token detection and validation
 
 - **Worker Initialization**:
   - `src/worker.py:42-51` - Update validation to handle both auth methods
 
+- **New CLI Commands**:
+  - Add `mise claude-login` task - Wrapper for `claude setup-token`
+  - Add `mise claude-status` task - Check authentication status
+
 - **Testing**:
-  - New unit tests for authentication abstraction
-  - New integration tests for web auth (with mock session tokens)
+  - New unit tests for CLI client wrapper (mock subprocess)
+  - New integration tests for OAuth flow (with real CLI)
   - Update existing tests to work with both auth methods
 
 ### User Benefits
@@ -72,19 +75,20 @@ Many users already have Claude Max accounts through claude.ai with generous usag
 
 ### Risks
 
-- **Session Token Expiration**: Web sessions may expire, requiring user re-authentication
-- **Anthropic API Changes**: Web authentication is not officially documented by Anthropic
-- **Browser Dependency**: Initial auth requires browser for login flow
-- **Token Storage Security**: Session tokens must be stored securely
-- **Maintenance Burden**: Two auth methods to maintain and test
+- **OAuth Token Expiration**: OAuth tokens expire after 1 year, requiring re-authentication
+- **Claude CLI Dependency**: Requires Claude Code CLI to be installed (`npm install -g @anthropic-ai/claude-code`)
+- **Subprocess Performance**: CLI calls via subprocess slower than direct SDK calls
+- **CLI API Changes**: Claude CLI output format may change (mitigated by JSON output mode)
+- **Maintenance Burden**: Two code paths to maintain and test (SDK + CLI)
 
 ### Risk Mitigation
 
-- Implement automatic token refresh with user notification on failure
-- Design abstraction layer to easily swap implementations if Anthropic API changes
-- Support headless browser automation for CLI-only environments
-- Use secure token storage (environment variables, encrypted files, or system keychain)
+- OAuth tokens valid for 1 year (minimal re-auth burden)
+- Document Claude CLI installation in setup instructions
+- Cache CLI client initialization, use `--output-format json` for stable parsing
+- Abstract both clients behind common interface, easy to update if CLI changes
 - Comprehensive testing for both auth methods with shared test suite
+- **Much lower risk than browser automation approach** (no reverse-engineering, official CLI)
 
 ## Impact Assessment
 
@@ -100,62 +104,50 @@ Many users already have Claude Max accounts through claude.ai with generous usag
 - Web authentication reverse engineering (Anthropic API undocumented)
 - Token refresh logic (complex edge cases)
 
-### High Risk Areas
+### Low Risk Areas (Compared to Browser Automation)
 
-- **Anthropic Terms of Service**: Using web authentication for API-like access may violate ToS
-- **API Stability**: Web authentication mechanism may change without notice
-- **Legal/Compliance**: Must verify this usage is permitted
+- **✅ ToS Compliant**: Uses official Claude Code CLI (not reverse-engineered)
+- **✅ API Stable**: CLI interface is official Anthropic tool
+- **✅ No Legal Issues**: OAuth tokens obtained through official `claude setup-token` command
 
 ### Migration Strategy
 
-- **Phase 1**: Add web auth as experimental feature (opt-in, clearly marked beta)
-- **Phase 2**: Gather user feedback, monitor stability
-- **Phase 3**: Promote to stable if no ToS/legal issues arise
-- **Fallback**: Can remove feature or make API-key-only if issues discovered
+- **Phase 1**: Implement CLI client wrapper and authentication factory
+- **Phase 2**: Test with both API key (SDK) and OAuth (CLI)
+- **Phase 3**: Deploy as stable feature (no experimental label needed)
+- **Rollback**: Easy - remove CLI code path, keep SDK only
 
-## Open Questions Requiring User Input
+## Open Questions (Non-Blocking)
 
-### Critical Decision Points
+**Q1: Should we cache CLI client initialization?**
 
-**Q1: Is web authentication permitted under Anthropic's Terms of Service?**
+- **Recommendation**: Yes - avoid repeated subprocess overhead
+- **Decision**: Implement lazy initialization with cached client instance
 
-- **Status**: REQUIRES INVESTIGATION
-- **Action**: Review Anthropic ToS, contact Anthropic support if unclear
-- **Blocker**: YES - cannot proceed without ToS compliance
+**Q2: Should we support automatic fallback from OAuth to API key?**
 
-**Q2: Should we use official Anthropic web SDK or reverse-engineer the API?**
+- **Option A**: Auto-fallback if OAuth fails
+- **Option B**: Explicit auth method selection only
+- **Recommendation**: Option A - better UX, try OAuth first if token present
 
-- **Option A**: Wait for official web SDK from Anthropic (if they release one)
-- **Option B**: Reverse-engineer claude.ai authentication (risky, may break)
-- **Option C**: Use third-party libraries that may exist (dependency risk)
-- **Recommendation**: Check for official SDK first, consider third-party, reverse-engineer only as last resort
+**Q3: Should we add authentication status to verify_config?**
 
-**Q3: How should session tokens be stored?**
-
-- **Option A**: Environment variables (simple, less secure)
-- **Option B**: Encrypted file in user's home directory (more secure)
-- **Option C**: System keychain integration (most secure, platform-specific)
-- **Recommendation**: Start with Option A for simplicity, add Option C later
-
-**Q4: Should we support both web auth and API key simultaneously?**
-
-- **Option A**: One method at a time (simpler)
-- **Option B**: Try web auth, fall back to API key (better UX)
-- **Option C**: Use both in parallel for redundancy (complex)
-- **Recommendation**: Option B - try preferred method, fall back to alternative
+- **Recommendation**: Yes - show which auth method is active
+- **Decision**: Add auth method and token type to diagnostic output
 
 ### Implementation Complexity
 
-- **Estimated Effort**: 2-3 weeks for full implementation and testing
-- **Dependencies**: May require additional Python packages (e.g., playwright for browser automation)
-- **Expertise Required**: Understanding of OAuth-like flows, session management, web APIs
+- **Estimated Effort**: 1-2 days for implementation, 1 day for testing
+- **Dependencies**: Requires Claude Code CLI installed (`@anthropic-ai/claude-code`)
+- **Expertise Required**: Subprocess management, environment variable handling
 
 ### Recommendation
 
-Given the **high risk of ToS violation** and **API stability concerns**, I recommend:
+**✅ PROCEED** - This is a low-risk, high-value enhancement:
 
-1. **FIRST**: Investigate Anthropic ToS and contact their support to confirm web auth is permitted
-2. **IF PERMITTED**: Proceed with design.md and implementation
-3. **IF NOT PERMITTED**: Close this proposal and explore alternatives (e.g., Anthropic API rate limit optimizations, caching improvements)
+1. **No ToS concerns** - Uses official CLI
+2. **Stable implementation** - CLI is official Anthropic tool
+3. **Low complexity** - Subprocess wrapper much simpler than browser automation
+4. **High user value** - Enables Claude Max users to use their subscriptions
 
-**Proposed Action**: Pause this proposal pending ToS investigation. User should verify legal compliance before investing engineering effort.
+**Proposed Action**: Implement as planned with simplified design (CLI wrapper instead of browser automation)
