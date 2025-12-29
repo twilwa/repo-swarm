@@ -4,6 +4,42 @@
 # Usage: ./single.sh [REPO_NAME_OR_URL] [force] [model MODEL] [max-tokens NUM] [type TYPE]
 # Default repository is "is-odd" if not specified
 
+# Cleanup function to ensure processes are killed on exit
+cleanup() {
+	local exit_code=$?
+
+	# Kill worker and all its child processes
+	if [ -n "$WORKER_PID" ] && kill -0 $WORKER_PID 2>/dev/null; then
+		echo "🧹 Stopping worker and child processes (PID: $WORKER_PID)..."
+		# Kill the entire process group
+		pkill -P $WORKER_PID 2>/dev/null
+		kill $WORKER_PID 2>/dev/null
+		wait $WORKER_PID 2>/dev/null
+	fi
+
+	# Kill temporal server and all its child processes
+	if [ -n "$SERVER_PID" ] && kill -0 $SERVER_PID 2>/dev/null; then
+		echo "🧹 Stopping Temporal server and child processes (PID: $SERVER_PID)..."
+		# Kill the entire process group
+		pkill -P $SERVER_PID 2>/dev/null
+		kill $SERVER_PID 2>/dev/null
+		wait $SERVER_PID 2>/dev/null
+	fi
+
+	# Extra safety: Kill any remaining temporal or investigate_worker processes
+	pkill -f "temporal server start-dev" 2>/dev/null
+	pkill -f "investigate_worker" 2>/dev/null
+	pkill -f "uv run python -m investigate_worker" 2>/dev/null
+
+	# Give processes a moment to terminate
+	sleep 1
+
+	exit $exit_code
+}
+
+# Set trap to always cleanup on exit (success, error, or interrupt)
+trap cleanup EXIT INT TERM
+
 # Always load .env.local file for local testing
 if [ -f ".env.local" ]; then
 	echo "📂 Loading configuration from .env.local..."
@@ -43,7 +79,7 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
 fi
 
 # Default repository if not specified
-DEFAULT_REPO="is-odd"
+DEFAULT_REPO="repo-swarm"
 REPO_ARG="${1:-$DEFAULT_REPO}"
 
 # Check if first argument is a special flag (h, help, dry-run, force, etc.)
@@ -54,7 +90,7 @@ if [[ $1 == "h" ]] || [[ $1 == "help" ]]; then
 	echo ""
 	echo "Repository Argument:"
 	echo "  REPO_NAME_OR_URL                         Repository name from repos.json or direct GitHub URL"
-	echo "                                           Default: is-odd"
+	echo "                                           Default: repo-swarm"
 	echo ""
 	echo "Arguments (can be used in any order):"
 	echo "  force                                    Forces investigation ignoring cache"
@@ -75,16 +111,15 @@ if [[ $1 == "h" ]] || [[ $1 == "help" ]]; then
 	echo "  generic, backend, frontend, mobile, infra-as-code, libraries"
 	echo ""
 	echo "Examples:"
-	echo "  mise single                                    # Investigate is-odd (default)"
-	echo "  mise single is-even                             # Investigate is-even repository"
+	echo "  mise single                                    # Investigate repo-swarm (default)"
+	echo "  mise single react                              # Investigate react repository"
 	echo "  mise single https://github.com/user/repo      # Direct URL"
-	echo "  mise single is-odd force                # Force investigation of is-odd"
-	echo "  mise single force                             # Force investigation of default (is-odd)"
-	echo "  mise single force-section monitoring          # Force only monitoring section"
-	echo "  mise single model claude-3-haiku-20241022     # Use default repo with different model"
-	echo "  mise single is-odd type libraries max-tokens 5000"
+	echo "  mise single repo-swarm force                   # Force investigation of repo-swarm"
+	echo "  mise single force                              # Force investigation of default (repo-swarm)"
+	echo "  mise single force-section monitoring           # Force only monitoring section"
+	echo "  mise single model claude-3-haiku-20241022      # Use default repo with different model"
+	echo "  mise single repo-swarm type backend max-tokens 5000"
 	echo ""
-	kill $SERVER_PID 2>/dev/null
 	exit 0
 fi
 
@@ -212,9 +247,28 @@ else
 	eval $CMD
 fi
 
-# Cleanup
+# Success message (cleanup happens automatically via trap)
 echo ""
-echo "Cleaning up..."
-kill $WORKER_PID 2>/dev/null
-kill $SERVER_PID 2>/dev/null
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ Single repository investigation complete!"
+echo ""
+echo "📊 Investigation Summary:"
+echo "   Repository: $REPO_ARG"
+echo "   Type: ${REPO_TYPE#--type=}"
+[ -n "$CLAUDE_MODEL" ] && echo "   Model: ${CLAUDE_MODEL#--claude-model=}"
+echo ""
+echo "🎯 What to expect if successful:"
+echo "   1. Analysis result saved to temp/[repo-name].arch.md"
+echo "   2. Committed to architecture hub repository"
+echo "   3. Investigation metadata cached for future runs"
+echo ""
+echo "📁 Check your results:"
+echo "   Local: temp/repos/$REPO_ARG/.arch.md"
+echo '   Hub: Check $ARCH_HUB_REPO_NAME (set in .env.local)'
+echo ""
+echo "💡 First time running? Expected output:"
+echo "   - Cloned repository to temp/repos/$REPO_ARG/"
+echo "   - Generated .arch.md with sections: overview, modules, data flow, etc."
+echo "   - Saved to architecture hub (if configured)"
+echo "   - Cached metadata to skip unchanged repos on next run"
+echo ""

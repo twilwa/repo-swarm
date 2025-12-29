@@ -1,5 +1,5 @@
 {
-  "default": "https://github.com/ascpixi/is-odd",
+  "default": "https://github.com/royosherove/repo-swarm",
   "_comment": "Available types: generic, backend, frontend, mobile, infra-as-code, libraries",
   "repositories": {
     "repo-swarm": {
