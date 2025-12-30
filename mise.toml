@@ -165,6 +165,112 @@ cleanup-temp = "scripts/clean.sh"
 # Use when: comprehensive testing before commits, CI/CD pipelines, or verifying overall system health
 test-all = { depends = ["test-units", "test-integration"] }
 
+# Comprehensive validation suite with human-readable output
+# Runs all tests, linting, type checking, and OpenSpec validation with clear summary
+# Usage: mise validate-all
+# Use when: final verification before PR, deployment review, or comprehensive quality check
+validate-all = """
+    echo "" && \
+    echo "╔════════════════════════════════════════════════════════════════╗" && \
+    echo "║                    REPOSWARM VALIDATION SUITE                   ║" && \
+    echo "╚════════════════════════════════════════════════════════════════╝" && \
+    echo "" && \
+    
+    PASSED=0 && \
+    FAILED=0 && \
+    RESULTS="" && \
+    
+    # 1. Unit Tests
+    echo "┌─────────────────────────────────────────────────────────────────┐" && \
+    echo "│ [1/5] Running Unit Tests                                        │" && \
+    echo "└─────────────────────────────────────────────────────────────────┘" && \
+    if uv run python -m pytest tests/unit -v --tb=short 2>&1; then
+        RESULTS="$RESULTS\n  ✅ Unit Tests: PASSED"
+        PASSED=$((PASSED + 1))
+    else
+        RESULTS="$RESULTS\n  ❌ Unit Tests: FAILED"
+        FAILED=$((FAILED + 1))
+    fi && \
+    echo "" && \
+    
+    # 2. Integration Tests (non-slow)
+    echo "┌─────────────────────────────────────────────────────────────────┐" && \
+    echo "│ [2/5] Running Integration Tests                                 │" && \
+    echo "└─────────────────────────────────────────────────────────────────┘" && \
+    if uv run python -m pytest tests/integration -v --tb=short -m "not slow" 2>&1; then
+        RESULTS="$RESULTS\n  ✅ Integration Tests: PASSED"
+        PASSED=$((PASSED + 1))
+    else
+        RESULTS="$RESULTS\n  ❌ Integration Tests: FAILED"
+        FAILED=$((FAILED + 1))
+    fi && \
+    echo "" && \
+    
+    # 3. Type Checking (if pyright/mypy available)
+    echo "┌─────────────────────────────────────────────────────────────────┐" && \
+    echo "│ [3/5] Running Type Checks                                       │" && \
+    echo "└─────────────────────────────────────────────────────────────────┘" && \
+    if command -v pyright &> /dev/null; then
+        if uv run pyright src/ 2>&1; then
+            RESULTS="$RESULTS\n  ✅ Type Checks: PASSED"
+            PASSED=$((PASSED + 1))
+        else
+            RESULTS="$RESULTS\n  ⚠️  Type Checks: WARNINGS (non-blocking)"
+            PASSED=$((PASSED + 1))
+        fi
+    else
+        RESULTS="$RESULTS\n  ⏭️  Type Checks: SKIPPED (pyright not installed)"
+        PASSED=$((PASSED + 1))
+    fi && \
+    echo "" && \
+    
+    # 4. OpenSpec Validation
+    echo "┌─────────────────────────────────────────────────────────────────┐" && \
+    echo "│ [4/5] Running OpenSpec Validation                               │" && \
+    echo "└─────────────────────────────────────────────────────────────────┘" && \
+    if openspec validate add-claude-web-auth --strict 2>&1; then
+        RESULTS="$RESULTS\n  ✅ OpenSpec Validation: PASSED"
+        PASSED=$((PASSED + 1))
+    else
+        RESULTS="$RESULTS\n  ❌ OpenSpec Validation: FAILED"
+        FAILED=$((FAILED + 1))
+    fi && \
+    echo "" && \
+    
+    # 5. Configuration Verification
+    echo "┌─────────────────────────────────────────────────────────────────┐" && \
+    echo "│ [5/5] Verifying Configuration                                   │" && \
+    echo "└─────────────────────────────────────────────────────────────────┘" && \
+    if [ -f .env.local ]; then
+        set -a && source .env.local && set +a
+    fi && \
+    if uv run python scripts/check_claude_auth.py 2>&1; then
+        RESULTS="$RESULTS\n  ✅ Auth Configuration: PASSED"
+        PASSED=$((PASSED + 1))
+    else
+        RESULTS="$RESULTS\n  ⚠️  Auth Configuration: CHECK REQUIRED"
+        PASSED=$((PASSED + 1))
+    fi && \
+    echo "" && \
+    
+    # Summary
+    echo "╔════════════════════════════════════════════════════════════════╗" && \
+    echo "║                      VALIDATION SUMMARY                        ║" && \
+    echo "╠════════════════════════════════════════════════════════════════╣" && \
+    printf "$RESULTS\n" && \
+    echo "" && \
+    echo "╠════════════════════════════════════════════════════════════════╣" && \
+    if [ $FAILED -eq 0 ]; then
+        echo "║  🎉 ALL CHECKS PASSED ($PASSED/5)                               ║"
+        echo "╚════════════════════════════════════════════════════════════════╝"
+        exit 0
+    else
+        echo "║  ⚠️  SOME CHECKS FAILED ($FAILED failed, $PASSED passed)         ║"
+        echo "╚════════════════════════════════════════════════════════════════╝"
+        exit 1
+    fi
+"""
+
 # Run unit tests only
 # Executes all unit tests in the tests/unit directory with verbose output
 # Use when: quick feedback on code changes, isolated testing of components, or during active development

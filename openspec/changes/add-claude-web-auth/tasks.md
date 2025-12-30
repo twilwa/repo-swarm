@@ -2,102 +2,117 @@
 
 ## 1. Core Authentication Detection
 
-- [ ] 1.1 Create authentication detection utility
+- [x] 1.1 Create authentication detection utility
   - Function: `get_claude_authentication() -> dict`
   - Check for OAuth tokens: `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_OAUTH_TOKEN`
   - Check for API key: `ANTHROPIC_API_KEY`
   - Return: `{'method': 'oauth'|'api_key', 'token': str, 'use_cli': bool}`
   - Location: New file `src/investigator/core/auth_detector.py`
+  - ✅ Completed: Full implementation with priority detection
 
-- [ ] 1.2 Add authentication validation
+- [x] 1.2 Add authentication validation
   - Validate OAuth token format (`sk-ant-oat01-...`)
   - Validate API key format (`sk-ant-api03-...`)
   - Return clear error messages for invalid tokens
   - Include setup instructions in error messages
+  - ✅ Completed: `validate_claude_credentials()` with comprehensive validation
 
 ## 2. Claude CLI Client Wrapper
 
-- [ ] 2.1 Create ClaudeCLIClient class
+- [x] 2.1 Create ClaudeCLIClient class
   - New file: `src/investigator/core/claude_cli_client.py`
   - Method: `messages_create()` - Compatible with Anthropic SDK interface
   - Use `claude --print --output-format json` for subprocess calls
   - Parse JSON output from CLI
   - Handle errors and timeouts
+  - ✅ Completed: Full implementation with SDK-compatible interface
 
-- [ ] 2.2 Add environment variable handling
+- [x] 2.2 Add environment variable handling
   - Set `CLAUDE_CODE_OAUTH_TOKEN` in subprocess environment
   - Set `CLAUDE_USE_SUBSCRIPTION=true` to force subscription mode
   - Remove `ANTHROPIC_API_KEY` from subprocess environment if present
   - Pass through other relevant environment variables
+  - ✅ Completed: `_prepare_environment()` method
 
-- [ ] 2.3 Implement subprocess management
+- [x] 2.3 Implement subprocess management
   - Use `subprocess.run()` with timeout (default 300 seconds)
   - Capture stdout and stderr
   - Handle non-zero exit codes
   - Sanitize OAuth token from error messages
+  - ✅ Completed: `_sanitize_token_from_error()` and full error handling
 
 ## 3. SDK Client Wrapper (Refactor Existing)
 
-- [ ] 3.1 Create ClaudeSDKClient class
+- [x] 3.1 Create ClaudeSDKClient class
   - New file: `src/investigator/core/claude_sdk_client.py`
   - Wrap existing `Anthropic(api_key=...)` logic
   - Method: `messages_create()` - Same interface as CLI client
   - Migrate existing code from `claude_analyzer.py`
+  - ✅ Completed: Full implementation with unified interface
 
-- [ ] 3.2 Maintain backward compatibility
+- [x] 3.2 Maintain backward compatibility
   - Ensure existing API key flow works identically
   - No changes to API call parameters
   - Preserve error handling behavior
+  - ✅ Completed: Returns raw Anthropic SDK response objects
 
 ## 4. Client Factory
 
-- [ ] 4.1 Create client factory
+- [x] 4.1 Create client factory
   - New file: `src/investigator/core/claude_client_factory.py`
   - Function: `create_claude_client() -> ClaudeClient`
   - Use auth detection to choose SDK or CLI client
   - Return unified interface
+  - ✅ Completed: Routes to appropriate client based on auth detection
 
-- [ ] 4.2 Add client interface
+- [x] 4.2 Add client interface
   - Define common interface for both clients
   - Method: `messages_create(model, max_tokens, messages) -> Response`
   - Ensure both clients return compatible response objects
+  - ✅ Completed: Both clients implement ClaudeClientProtocol
 
 ## 5. Update Existing Code
 
-- [ ] 5.1 Update ClaudeAnalyzer
+- [x] 5.1 Update ClaudeAnalyzer
   - Modify `src/investigator/core/claude_analyzer.py`
   - Replace direct `Anthropic(api_key=...)` with factory
   - Use `client = create_claude_client()`
   - No changes to `analyze_with_context()` method signature
+  - ✅ Completed: Uses `create_claude_client(logger=logger)`
 
-- [ ] 5.2 Update ClaudeInvestigator
+- [x] 5.2 Update ClaudeInvestigator
   - Modify `src/investigator/investigator.py:55-58`
   - Remove direct API key parameter passing
   - Let factory handle authentication detection
+  - ✅ Completed: Factory handles auth, error messages updated
 
-- [ ] 5.3 Update Temporal activities
+- [x] 5.3 Update Temporal activities
   - Modify `src/activities/investigate_activities.py:614-618`
   - Update to use factory instead of direct API key
   - Ensure OAuth token available in worker environment
+  - ✅ Completed: No direct API key passing needed
 
-- [ ] 5.4 Update worker initialization
+- [x] 5.4 Update worker initialization
   - Modify `src/worker.py:42-51`
   - Validate either API key OR OAuth token present
   - Provide clear error message if neither found
+  - ✅ Completed: Worker validates both auth options
 
 ## 6. Configuration
 
-- [ ] 6.1 Update environment variables
+- [x] 6.1 Update environment variables
   - Add to `.env.example`:
     - `CLAUDE_CODE_OAUTH_TOKEN=` (OAuth token from claude setup-token)
     - `CLAUDE_OAUTH_TOKEN=` (alternative OAuth token variable)
   - Document both API key and OAuth options
   - Add comments explaining when to use each
+  - ✅ Completed: Full documentation in .env.example
 
-- [ ] 6.2 Update config validation
+- [x] 6.2 Update config validation
   - Modify `src/investigator/core/config.py`
   - Add OAuth token format validation
   - Add helpful error messages for authentication issues
+  - ✅ Completed: `validate_oauth_token()` added with full validation
 
 ## 7. CLI Commands
 
@@ -131,14 +146,11 @@
   - Add troubleshooting guide for auth issues
   - ✅ Completed: Added comprehensive authentication section to README.md with setup steps, priority order, and troubleshooting
 
-- [ ] 8.2 Update .env.example
+- [x] 8.2 Update .env.example
   - Add detailed comments for OAuth variables
   - Show example OAuth token format
   - Explain difference between OAuth and API key
-  - ⚠️ Manual update required: File appears to be protected. Content to add:
-    - CLAUDE_CODE_OAUTH_TOKEN= with comments about OAuth setup
-    - CLAUDE_OAUTH_TOKEN= with priority explanation
-    - Updated ANTHROPIC_API_KEY comments explaining both options
+  - ✅ Completed: Full OAuth documentation with priority explanation
 
 - [x] 8.3 Update openspec/project.md
   - Document authentication abstraction pattern
@@ -150,29 +162,33 @@
 
 ## 9. Testing
 
-- [ ] 9.1 Unit tests for CLI client
+- [x] 9.1 Unit tests for CLI client
   - Test subprocess call construction
   - Test JSON parsing from CLI output
   - Test error handling (non-zero exit, timeout)
   - Test OAuth token sanitization in errors
   - Mock subprocess calls
+  - ✅ Completed: `tests/unit/test_claude_cli_client.py`
 
-- [ ] 9.2 Unit tests for authentication detection
+- [x] 9.2 Unit tests for authentication detection
   - Test OAuth token detection
   - Test API key detection
   - Test priority (OAuth over API key)
   - Test error cases (no credentials)
+  - ✅ Completed: `tests/unit/test_auth_detector.py`
 
-- [ ] 9.3 Integration tests
+- [x] 9.3 Integration tests
   - Test with real API key (existing tests)
   - Test with real OAuth token (if available in CI)
   - Test authentication fallback
   - Test both auth methods produce compatible results
+  - ✅ Completed: `tests/integration/test_claude_authentication.py`, `test_auth_fallback_comprehensive.py`
 
-- [ ] 9.4 Update existing tests
+- [x] 9.4 Update existing tests
   - Ensure tests work with factory pattern
   - Add test fixtures for both auth methods
   - Mock authentication detection in unit tests
+  - ✅ Completed: Tests updated for factory pattern
 
 ## 10. Validation and Deployment
 
@@ -192,14 +208,17 @@
   - Test authentication flow from scratch
   - Update any missing documentation
 
-- [ ] 10.4 OpenSpec validation
+- [x] 10.4 OpenSpec validation
   - Run `openspec validate add-claude-web-auth --strict`
   - Fix any validation errors
   - Ensure all scenarios in spec.md are implemented
+  - ✅ Completed: Validation passes
 
 ## Summary
 
 **Total Tasks**: 40 (simplified from 41 in original proposal)
+**Completed**: 37
+**Remaining**: 3 (manual testing, performance testing, documentation review)
 
 **Removed Complexity** (from original browser automation approach):
 
