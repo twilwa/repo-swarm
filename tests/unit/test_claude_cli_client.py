@@ -48,6 +48,59 @@ class TestClaudeCLIClientMessages:
             assert hasattr(response, "model")
             assert hasattr(response, "usage")
 
+    def test_messages_create_with_logger_logs_request(self):
+        """Should log request/response when logger is provided."""
+        mock_logger = Mock()
+        client = ClaudeCLIClient(
+            oauth_token="sk-ant-oat01-test-token-123", logger=mock_logger
+        )
+
+        mock_response = {
+            "id": "msg_123",
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Test response"}],
+            "model": "claude-opus-4-5-20251101",
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        }
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=0, stdout=json.dumps(mock_response), stderr=""
+            )
+
+            client.messages_create(
+                model="claude-opus-4-5-20251101",
+                max_tokens=1024,
+                messages=[{"role": "user", "content": "Hello"}],
+            )
+
+            # Verify logger was called
+            assert mock_logger.debug.called or mock_logger.info.called
+
+    def test_messages_create_without_logger_still_works(self):
+        """Should work without logger (backward compatible)."""
+        client = ClaudeCLIClient(oauth_token="sk-ant-oat01-test-token-123")
+
+        mock_response = {
+            "id": "msg_123",
+            "content": [{"type": "text", "text": "response"}],
+        }
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=0, stdout=json.dumps(mock_response), stderr=""
+            )
+
+            response = client.messages_create(
+                model="claude-opus-4-5-20251101",
+                max_tokens=1024,
+                messages=[{"role": "user", "content": "Test"}],
+            )
+
+            assert response is not None
+
     def test_messages_create_subprocess_command_structure(self):
         """Should call subprocess with correct claude CLI command."""
         client = ClaudeCLIClient(oauth_token="sk-ant-oat01-test-token-123")
@@ -486,3 +539,20 @@ class TestClaudeCLIClientInitialization:
         assert client is not None
         # Default should be 300 seconds
         assert hasattr(client, "_timeout")
+
+    def test_initialization_with_logger(self):
+        """Should initialize with logger parameter."""
+        mock_logger = Mock()
+        client = ClaudeCLIClient(
+            oauth_token="sk-ant-oat01-test-token", logger=mock_logger
+        )
+
+        assert client is not None
+        assert client.logger == mock_logger
+
+    def test_initialization_without_logger(self):
+        """Should initialize without logger (backward compatible)."""
+        client = ClaudeCLIClient(oauth_token="sk-ant-oat01-test-token")
+
+        assert client is not None
+        assert client.logger is None

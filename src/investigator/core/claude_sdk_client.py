@@ -5,9 +5,13 @@ ABOUTME: Enables dual authentication (API key and OAuth) by providing consistent
 Wrapper around the Anthropic SDK for Claude API interactions.
 Maintains exact backward compatibility with direct SDK usage while enabling
 a unified interface for both API key and OAuth authentication methods.
+
+Implements: ClaudeClientProtocol
+    - Provides messages_create(model, max_tokens, messages) method
+    - Returns Anthropic SDK response objects (backward compatible)
 """
 
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from anthropic import Anthropic
 
@@ -19,6 +23,9 @@ class ClaudeSDKClient:
     Provides a unified interface for message creation that matches the
     ClaudeCLIClient, enabling seamless switching between API key and
     OAuth authentication methods.
+
+    Implements: ClaudeClientProtocol
+        - messages_create(model: str, max_tokens: int, messages: list) -> response
 
     Attributes:
         client: Anthropic SDK client instance
@@ -37,12 +44,14 @@ class ClaudeSDKClient:
         self.client = Anthropic(api_key=api_key)
         self.logger = logger
 
-    def messages_create(self, model: str, max_tokens: int, messages: list) -> Any:
+    def messages_create(self, model: str, max_tokens: int, messages: List[dict]) -> Any:
         """
         Send a message to Claude and get a response.
 
         Unified interface for both API key and OAuth authentication methods.
         Returns the raw Anthropic SDK response object for backward compatibility.
+
+        Implements: ClaudeClientProtocol.messages_create()
 
         Args:
             model: Claude model identifier (e.g., "claude-opus-4-5-20251101")

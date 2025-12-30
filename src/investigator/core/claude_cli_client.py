@@ -1,9 +1,21 @@
 # ABOUTME: Claude CLI client wrapper for OAuth token authentication via subprocess
 # ABOUTME: Implements SDK-compatible interface for calling claude CLI with --print --output-format json
 
+"""
+Claude CLI client wrapper that calls `claude --print --output-format json`.
+
+Implements a subprocess-based interface for Claude API using OAuth token authentication
+through the official Claude CLI tool. Returns responses compatible with the
+Anthropic SDK Message type.
+
+Implements: ClaudeClientProtocol
+    - Provides messages_create(model, max_tokens, messages) method
+    - Returns MessageResponse objects (compatible with Anthropic SDK structure)
+"""
+
 import json
 import os
-import subprocess
+import subprocess  # nosec
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -53,20 +65,31 @@ class ClaudeCLIClient:
     through the official Claude CLI tool. Returns responses compatible with the
     Anthropic SDK Message type.
 
+    Implements: ClaudeClientProtocol
+        - messages_create(model: str, max_tokens: int, messages: list) -> MessageResponse
+
     Attributes:
         oauth_token: OAuth token for Claude authentication (sk-ant-oat01-...)
         timeout: Subprocess timeout in seconds (default: 300)
+        logger: Optional logger for debug/info/error messages
     """
 
     DEFAULT_TIMEOUT = 300
 
-    def __init__(self, oauth_token: str, timeout: Optional[int] = None):
+    def __init__(
+        self,
+        oauth_token: str,
+        timeout: Optional[int] = None,
+        logger: Optional[Any] = None,
+    ):
         """
         Initialize ClaudeCLIClient.
 
         Args:
             oauth_token: OAuth token from `claude setup-token` (format: sk-ant-oat01-...)
             timeout: Subprocess timeout in seconds (default: 300 seconds)
+            logger: Optional logger object with debug(), info(), error() methods.
+                   If not provided, logging is disabled.
 
         Raises:
             ValueError: If oauth_token is empty or None
@@ -76,6 +99,7 @@ class ClaudeCLIClient:
 
         self.oauth_token = oauth_token.strip()
         self._timeout = timeout if timeout is not None else self.DEFAULT_TIMEOUT
+        self.logger = logger
 
     def messages_create(
         self, model: str, max_tokens: int, messages: List[Dict[str, str]]
@@ -84,6 +108,8 @@ class ClaudeCLIClient:
         Create a message using Claude CLI with OAuth authentication.
 
         Compatible with Anthropic SDK interface: messages.create(model, max_tokens, messages).
+
+        Implements: ClaudeClientProtocol.messages_create()
 
         Args:
             model: Claude model identifier (e.g., "claude-opus-4-5-20251101")
@@ -106,6 +132,11 @@ class ClaudeCLIClient:
             ... )
             >>> print(response.content[0].text)
         """
+        if self.logger:
+            self.logger.debug(
+                f"Preparing Claude CLI call: model={model}, max_tokens={max_tokens}"
+            )
+
         # Build environment for subprocess
         env = self._prepare_environment()
 
@@ -114,7 +145,7 @@ class ClaudeCLIClient:
 
         try:
             # Execute Claude CLI subprocess
-            result = subprocess.run(
+            result = subprocess.run(  # nosec - fixed command list
                 cmd,
                 env=env,
                 stdout=subprocess.PIPE,
@@ -128,26 +159,46 @@ class ClaudeCLIClient:
                 error_msg = result.stderr if result.stderr else "Unknown error"
                 # Sanitize OAuth token from error message
                 error_msg = self._sanitize_token_from_error(error_msg)
-                raise Exception(
+                msg = (
                     f"Claude CLI failed with exit code {result.returncode}: {error_msg}"
                 )
+                if self.logger:
+                    self.logger.error(f"Claude CLI request failed: {msg}")
+                raise Exception(msg) from None
 
             # Parse JSON response
             if not result.stdout or not result.stdout.strip():
-                raise Exception("Claude CLI returned empty output")
+                error_msg = "Claude CLI returned empty output"
+                if self.logger:
+                    self.logger.error(f"Claude CLI request failed: {error_msg}")
+                raise Exception(error_msg) from None
 
             try:
                 response_data = json.loads(result.stdout)
             except json.JSONDecodeError as e:
-                raise Exception(f"Failed to parse Claude CLI JSON output: {str(e)}")
+                msg = f"Failed to parse Claude CLI JSON output: {str(e)}"
+                if self.logger:
+                    self.logger.error(f"Claude CLI request failed: {msg}")
+                raise Exception(msg) from e
 
             # Convert JSON to SDK-compatible response object
-            return self._parse_response(response_data)
+            response = self._parse_response(response_data)
 
-        except subprocess.TimeoutExpired:
-            raise TimeoutError(
-                f"Claude CLI subprocess timed out after {self._timeout} seconds"
-            )
+            if self.logger:
+                response_length = (
+                    len(response.content[0].text) if response.content else 0
+                )
+                self.logger.info(
+                    f"Received response from Claude CLI ({response_length} characters)"
+                )
+
+            return response
+
+        except subprocess.TimeoutExpired as e:
+            msg = f"Claude CLI subprocess timed out after {self._timeout} seconds"
+            if self.logger:
+                self.logger.error(f"Claude CLI request failed: {msg}")
+            raise TimeoutError(msg) from e
 
     def _prepare_environment(self) -> Dict[str, str]:
         """
