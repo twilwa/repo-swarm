@@ -104,7 +104,7 @@ class ClaudeAnalyzer:
             self.logger.info("Sending analysis request to Claude API")
             self.logger.debug(f"Using model: {claude_model}, max_tokens: {max_tokens}")
 
-            response = self.client.messages.create(
+            response = self.client.messages_create(
                 model=claude_model,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],

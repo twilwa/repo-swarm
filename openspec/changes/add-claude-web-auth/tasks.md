@@ -101,7 +101,7 @@
 
 ## 7. CLI Commands
 
-- [ ] 7.1 Add mise claude-login command
+- [x] 7.1 Add mise claude-login command
   - Add to `mise.toml`:
     ```toml
     [tasks.claude-login]
@@ -109,8 +109,9 @@
     run = "claude setup-token"
     ```
   - Add instructions to copy token to .env file
+  - ✅ Completed: Added `claude-login` task to mise.toml
 
-- [ ] 7.2 Add mise claude-status command
+- [x] 7.2 Add mise claude-status command
   - Add to `mise.toml`:
     ```toml
     [tasks.claude-status]
@@ -118,24 +119,34 @@
     run = "python scripts/check_claude_auth.py"
     ```
   - Create `scripts/check_claude_auth.py` to show auth method and status
+  - ✅ Completed: Created `scripts/check_claude_auth.py` with rich formatting support
+  - ✅ Completed: Added `claude-status` task to mise.toml
 
 ## 8. Documentation
 
-- [ ] 8.1 Update README.md
+- [x] 8.1 Update README.md
   - Add section: "Claude Authentication Options"
   - Document OAuth authentication with Claude Max
   - Document API key authentication
   - Add troubleshooting guide for auth issues
+  - ✅ Completed: Added comprehensive authentication section to README.md with setup steps, priority order, and troubleshooting
 
 - [ ] 8.2 Update .env.example
   - Add detailed comments for OAuth variables
   - Show example OAuth token format
   - Explain difference between OAuth and API key
+  - ⚠️ Manual update required: File appears to be protected. Content to add:
+    - CLAUDE_CODE_OAUTH_TOKEN= with comments about OAuth setup
+    - CLAUDE_OAUTH_TOKEN= with priority explanation
+    - Updated ANTHROPIC_API_KEY comments explaining both options
 
-- [ ] 8.3 Update openspec/project.md
+- [x] 8.3 Update openspec/project.md
   - Document authentication abstraction pattern
   - Update Claude API dependency section
   - Add OAuth to tech stack dependencies
+  - ✅ Completed: Added authentication abstraction pattern documentation
+  - ✅ Completed: Updated Claude API dependency section with OAuth and API key options
+  - ✅ Completed: Updated configuration variables section
 
 ## 9. Testing
 

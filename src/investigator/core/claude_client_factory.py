@@ -14,9 +14,9 @@ The factory automatically passes optional logger to both client types.
 
 from typing import Any, Optional
 
-from investigator.core.auth_detector import get_claude_authentication
-from investigator.core.claude_cli_client import ClaudeCLIClient
-from investigator.core.claude_sdk_client import ClaudeSDKClient
+from .auth_detector import get_claude_authentication
+from .claude_cli_client import ClaudeCLIClient
+from .claude_sdk_client import ClaudeSDKClient
 
 
 def create_claude_client(logger: Optional[Any] = None) -> Any:

@@ -493,6 +493,28 @@ verify-config = """
     uv run python scripts/verify_config.py
 """
 
+# Generate Claude OAuth token for Max subscription
+# Runs the official Claude CLI setup-token command to generate OAuth token
+# Usage: mise claude-login
+# Use when: setting up OAuth authentication for Claude Max subscription, or when API key is not available
+# After running, copy the generated token to .env.local as CLAUDE_CODE_OAUTH_TOKEN
+claude-login = "claude setup-token"
+
+# Check Claude authentication status
+# Displays current authentication method (OAuth or API key), token status, and which environment variables are set
+# Usage: mise claude-status
+# Use when: verifying authentication setup, troubleshooting auth issues, or checking which credentials are configured
+claude-status = """
+    echo "🔍 Checking Claude authentication status..." && \
+    if [ -f .env.local ]; then
+        set -a && \
+        source .env.local && \
+        set +a
+    fi && \
+    uv sync 2>/dev/null || echo "Dependencies already installed" && \
+    uv run python scripts/check_claude_auth.py
+"""
+
 # Test DynamoDB functionality locally
 # Usage: mise test-dynamodb [--real-aws] [--table-name NAME]
 # Examples:

@@ -17,7 +17,7 @@ import json
 import os
 import subprocess  # nosec
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 @dataclass
@@ -148,6 +148,7 @@ class ClaudeCLIClient:
             result = subprocess.run(  # nosec - fixed command list
                 cmd,
                 env=env,
+                input=messages[0]["content"] if messages else "",
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=self._timeout,
@@ -249,36 +250,56 @@ class ClaudeCLIClient:
         if model:
             cmd.extend(["--model", model])
 
-        # Add max tokens parameter
-        if max_tokens:
-            cmd.extend(["--max-tokens", str(max_tokens)])
+        # Note: max_tokens parameter not supported by Claude CLI
+        # The CLI will use model defaults for response length
 
         # Note: Messages are passed via stdin as prompt
         # The claude CLI will read from stdin if no file is specified
 
         return cmd
 
-    def _parse_response(self, response_data: Dict[str, Any]) -> MessageResponse:
+    def _parse_response(self, response_data: Any) -> MessageResponse:
         """
         Parse Claude CLI JSON response into SDK-compatible MessageResponse.
 
+        The CLI returns a list of events when using --output-format json.
+        We need to find the event with type="assistant" which contains the message.
+
         Args:
-            response_data: JSON response from Claude CLI
+            response_data: JSON response from Claude CLI (list or dict)
 
         Returns:
             MessageResponse object with SDK-compatible attributes
+
+        Raises:
+            Exception: If no assistant message found in response
         """
+        # Handle list response format from CLI
+        message_data = None
+        if isinstance(response_data, list):
+            # Find the assistant message in the event stream
+            for event in response_data:
+                if isinstance(event, dict) and event.get("type") == "assistant":
+                    message_data = event.get("message", {})
+                    break
+
+            if not message_data:
+                raise Exception("No assistant message found in Claude CLI response")
+        else:
+            # Handle dict format (direct message)
+            message_data = response_data
+
         # Parse content blocks
         content_list = []
-        if "content" in response_data:
-            for content_item in response_data["content"]:
+        if "content" in message_data:
+            for content_item in message_data["content"]:
                 if content_item.get("type") == "text":
                     content_list.append(
                         TextContent(type="text", text=content_item.get("text", ""))
                     )
 
         # Parse usage information
-        usage_data = response_data.get("usage", {})
+        usage_data = message_data.get("usage", {})
         usage = UsageInfo(
             input_tokens=usage_data.get("input_tokens", 0),
             output_tokens=usage_data.get("output_tokens", 0),
@@ -286,13 +307,13 @@ class ClaudeCLIClient:
 
         # Create response object
         return MessageResponse(
-            id=response_data.get("id", ""),
-            type=response_data.get("type", "message"),
-            role=response_data.get("role", "assistant"),
+            id=message_data.get("id", ""),
+            type=message_data.get("type", "message"),
+            role=message_data.get("role", "assistant"),
             content=content_list,
-            model=response_data.get("model", ""),
-            stop_reason=response_data.get("stop_reason", ""),
-            stop_sequence=response_data.get("stop_sequence"),
+            model=message_data.get("model", ""),
+            stop_reason=message_data.get("stop_reason", ""),
+            stop_sequence=message_data.get("stop_sequence"),
             usage=usage,
         )
 

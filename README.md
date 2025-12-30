@@ -52,7 +52,108 @@ graph TB
 ### Prerequisites
 
 - Python 3.12+
-- Claude API key
+- Claude authentication (API key or OAuth token)
+
+### Claude Authentication Options
+
+RepoSwarm supports two authentication methods for Claude API access:
+
+#### Option 1: OAuth Token (Claude Max Subscription) - Recommended
+
+If you have a Claude Max subscription, you can use OAuth authentication which provides access to Claude Max models.
+
+**Setup Steps:**
+
+1. **Generate OAuth token**:
+
+   ```bash
+   mise claude-login
+   ```
+
+   This runs the official Claude CLI `setup-token` command and generates an OAuth token.
+
+2. **Add token to `.env.local`**:
+
+   ```bash
+   CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...
+   ```
+
+   Copy the token displayed by `claude setup-token` into your `.env.local` file.
+
+3. **Verify authentication**:
+   ```bash
+   mise claude-status
+   ```
+   This command shows your current authentication method and token status.
+
+**Benefits of OAuth:**
+
+- ✅ Access to Claude Max models (if you have a subscription)
+- ✅ Uses official Claude CLI (ToS compliant)
+- ✅ Long-lived tokens (1 year validity)
+- ✅ No API key management needed
+
+#### Option 2: API Key Authentication
+
+For users without Claude Max subscription, use the standard Anthropic API key.
+
+**Setup Steps:**
+
+1. **Get API key** from [Anthropic Console](https://console.anthropic.com/)
+
+2. **Add to `.env.local`**:
+
+   ```bash
+   ANTHROPIC_API_KEY=sk-ant-api03-...
+   ```
+
+3. **Verify authentication**:
+   ```bash
+   mise claude-status
+   ```
+
+**Benefits of API Key:**
+
+- ✅ Works with standard Anthropic API tier
+- ✅ Direct SDK integration (faster)
+- ✅ Suitable for CI/CD and production environments
+
+#### Authentication Priority
+
+RepoSwarm checks credentials in this order:
+
+1. `CLAUDE_CODE_OAUTH_TOKEN` (highest priority)
+2. `CLAUDE_OAUTH_TOKEN` (alternative OAuth variable)
+3. `ANTHROPIC_API_KEY` (fallback)
+
+#### Troubleshooting Authentication
+
+**Check authentication status:**
+
+```bash
+mise claude-status
+```
+
+**Common Issues:**
+
+- **"No Claude authentication credentials found"**
+  - Ensure `.env.local` exists and contains either `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`
+  - Run `mise claude-login` for OAuth setup
+  - Or get API key from https://console.anthropic.com/
+
+- **"Invalid token format"**
+  - OAuth tokens must start with `sk-ant-oat01-`
+  - API keys must start with `sk-ant-api03-`
+  - Verify token was copied correctly (no extra spaces)
+
+- **"Token expired"**
+  - OAuth tokens: Run `mise claude-login` to generate a new token
+  - API keys: Check expiration in Anthropic Console and regenerate if needed
+
+- **"Authentication method not working"**
+  - Verify token is valid: `mise claude-status`
+  - Check rate limits in Anthropic dashboard
+  - Ensure correct environment variable name in `.env.local`
 
 ### Installation
 

@@ -13,7 +13,6 @@ try:
     # Try relative import first (when used as a module)
     from .activity_wrapper import ActivityWrapper
     from .core import (
-        ClaudeAnalyzer,
         Config,
         FileManager,
         GitRepositoryManager,
@@ -21,11 +20,11 @@ try:
         RepositoryTypeDetector,
         Utils,
     )
+    from .core.claude_analyzer import ClaudeAnalyzer
 except ImportError:
     # Fall back to absolute import (when run directly)
-    from activity_wrapper import ActivityWrapper
-    from core import (
-        ClaudeAnalyzer,
+    from .activity_wrapper import ActivityWrapper
+    from .core import (
         Config,
         FileManager,
         GitRepositoryManager,
@@ -33,6 +32,7 @@ except ImportError:
         RepositoryTypeDetector,
         Utils,
     )
+    from .core.claude_analyzer import ClaudeAnalyzer
 
 
 class ClaudeInvestigator:

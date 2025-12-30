@@ -64,24 +64,32 @@ RepoSwarm is an AI-powered multi-repository architecture discovery platform that
    - Configuration-driven selection via environment variables
    - Enables seamless switching between local dev and production
 
-2. **Temporal Workflow Pattern**
+2. **Authentication Abstraction Pattern**
+   - Unified authentication detection via `auth_detector.py`
+   - Supports multiple authentication methods (OAuth tokens, API keys)
+   - Priority-based credential resolution (OAuth > API key)
+   - Client factory pattern selects appropriate client (CLI vs SDK)
+   - Transparent switching between authentication methods
+   - Location: `src/investigator/core/auth_detector.py`, `claude_client_factory.py`
+
+3. **Temporal Workflow Pattern**
    - Durable execution survives process crashes
    - Automatic retry with exponential backoff
    - Continue-As-New pattern for long-running workflows
    - Activity-based composition for testability
 
-3. **Two-Level Caching**
+4. **Two-Level Caching**
    - **Investigation-level cache**: Repository-wide (commit SHA + branch + prompt versions)
    - **Prompt-level cache**: Step-specific (repo + step + commit + version)
    - Granular cache invalidation based on changes
 
-4. **Prompt Versioning System**
+5. **Prompt Versioning System**
    - Each prompt file starts with `version=N` header
    - Version changes trigger selective re-analysis
    - Cache keys include prompt version for reproducibility
    - Version header stripped before sending to Claude API
 
-5. **Context Chaining**
+6. **Context Chaining**
    - Prompts can reference previous analysis steps
    - Results build incrementally with growing context
    - Enables complex multi-step analysis workflows
@@ -195,7 +203,11 @@ RepoSwarm categorizes repositories into specialized types, each with tailored an
 
 - **Purpose**: AI-powered code analysis and documentation generation
 - **Model**: claude-opus-4-5-20251101 (configurable)
-- **Authentication**: API key via `ANTHROPIC_API_KEY` environment variable
+- **Authentication**: Supports two methods:
+  - **OAuth Token** (Claude Max): `CLAUDE_CODE_OAUTH_TOKEN` or `CLAUDE_OAUTH_TOKEN` - Generated via `claude setup-token`, provides access to Claude Max models
+  - **API Key** (Standard): `ANTHROPIC_API_KEY` - Standard Anthropic API key from console
+- **Authentication Priority**: OAuth tokens checked first, then API key (fallback)
+- **Client Selection**: OAuth uses Claude CLI subprocess, API key uses Anthropic SDK directly
 - **Rate Limits**: Varies by tier, managed via workflow chunking
 - **Docs**: https://docs.anthropic.com/
 
@@ -236,8 +248,11 @@ RepoSwarm categorizes repositories into specialized types, each with tailored an
 ### Key Configuration Variables
 
 ```bash
-# Required
-ANTHROPIC_API_KEY=sk-ant-...          # Claude API authentication
+# Required - Claude Authentication (choose one)
+# Option 1: OAuth Token (Claude Max subscription)
+CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...  # Generate via: mise claude-login
+# Option 2: API Key (Standard Anthropic API)
+ANTHROPIC_API_KEY=sk-ant-api03-...        # Get from: https://console.anthropic.com/
 
 # Local Development (file-based storage)
 LOCAL_TESTING=true                     # Use file storage instead of DynamoDB
