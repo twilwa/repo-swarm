@@ -1,5 +1,6 @@
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import asyncio
@@ -8,6 +9,7 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def validate_environment():
     """Validate all required environment variables and configuration before starting worker."""
@@ -25,67 +27,84 @@ def validate_environment():
 
     # Validate Claude configuration
     try:
-        claude_model = os.getenv('CLAUDE_MODEL', Config.CLAUDE_MODEL)
+        claude_model = os.getenv("CLAUDE_MODEL", Config.CLAUDE_MODEL)
         Config.validate_claude_model(claude_model)
         logger.info(f"  ✓ Claude model: {claude_model}")
     except ValueError as e:
         errors.append(f"Invalid Claude model: {e}")
 
     try:
-        max_tokens = int(os.getenv('MAX_TOKENS', Config.MAX_TOKENS))
+        max_tokens = int(os.getenv("MAX_TOKENS", Config.MAX_TOKENS))
         Config.validate_max_tokens(max_tokens)
         logger.info(f"  ✓ Max tokens: {max_tokens}")
     except ValueError as e:
         errors.append(f"Invalid max tokens: {e}")
 
-    # Required API keys
-    if not os.getenv('ANTHROPIC_API_KEY'):
-        errors.append("ANTHROPIC_API_KEY environment variable is required for Claude API access")
+    # Claude authentication - require either API key OR OAuth token
+    has_api_key = bool(os.getenv("ANTHROPIC_API_KEY"))
+    has_oauth = bool(
+        os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv("CLAUDE_OAUTH_TOKEN")
+    )
+
+    if not has_api_key and not has_oauth:
+        errors.append(
+            "Claude authentication required: Set ANTHROPIC_API_KEY (for API key) or CLAUDE_CODE_OAUTH_TOKEN (for OAuth)"
+        )
+    elif has_api_key and has_oauth:
+        logger.info("  ✓ Both API key and OAuth token present (OAuth will be used)")
+    elif has_oauth:
+        logger.info("  ✓ Claude OAuth token present")
     else:
         logger.info("  ✓ Anthropic API key present")
 
-    if not os.getenv('GITHUB_TOKEN'):
-        errors.append("GITHUB_TOKEN environment variable is required for GitHub API access")
+    if not os.getenv("GITHUB_TOKEN"):
+        errors.append(
+            "GITHUB_TOKEN environment variable is required for GitHub API access"
+        )
     else:
         logger.info("  ✓ GitHub token present")
 
     # AWS configuration for DynamoDB
-    if not os.getenv('AWS_ACCESS_KEY_ID'):
-        errors.append("AWS_ACCESS_KEY_ID environment variable is required for DynamoDB access")
+    if not os.getenv("AWS_ACCESS_KEY_ID"):
+        errors.append(
+            "AWS_ACCESS_KEY_ID environment variable is required for DynamoDB access"
+        )
     else:
         logger.info("  ✓ AWS access key present")
 
-    if not os.getenv('AWS_SECRET_ACCESS_KEY'):
-        errors.append("AWS_SECRET_ACCESS_KEY environment variable is required for DynamoDB access")
+    if not os.getenv("AWS_SECRET_ACCESS_KEY"):
+        errors.append(
+            "AWS_SECRET_ACCESS_KEY environment variable is required for DynamoDB access"
+        )
     else:
         logger.info("  ✓ AWS secret key present")
 
-    if not os.getenv('AWS_DEFAULT_REGION'):
+    if not os.getenv("AWS_DEFAULT_REGION"):
         warnings.append("AWS_DEFAULT_REGION not set, using default 'us-east-1'")
         logger.info("  ⚠ AWS region not set, will use 'us-east-1'")
     else:
         logger.info(f"  ✓ AWS region: {os.getenv('AWS_DEFAULT_REGION')}")
 
     # Temporal configuration
-    temporal_url = os.getenv('TEMPORAL_SERVER_URL', 'localhost:7233')
+    temporal_url = os.getenv("TEMPORAL_SERVER_URL", "localhost:7233")
     logger.info(f"  ✓ Temporal server URL: {temporal_url}")
 
-    temporal_namespace = os.getenv('TEMPORAL_NAMESPACE', 'default')
+    temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default")
     logger.info(f"  ✓ Temporal namespace: {temporal_namespace}")
 
-    temporal_queue = os.getenv('TEMPORAL_TASK_QUEUE', 'investigate-task-queue')
+    temporal_queue = os.getenv("TEMPORAL_TASK_QUEUE", "investigate-task-queue")
     logger.info(f"  ✓ Temporal task queue: {temporal_queue}")
 
-    temporal_identity = os.getenv('TEMPORAL_IDENTITY', 'investigate-worker')
+    temporal_identity = os.getenv("TEMPORAL_IDENTITY", "investigate-worker")
     logger.info(f"  ✓ Temporal identity: {temporal_identity}")
 
-    if os.getenv('TEMPORAL_API_KEY'):
+    if os.getenv("TEMPORAL_API_KEY"):
         logger.info("  ✓ Temporal API key present (for Temporal Cloud)")
     else:
         logger.info("  ⚠ No Temporal API key - assuming local Temporal server")
 
     # Prompt context storage configuration
-    prompt_storage = os.getenv('PROMPT_CONTEXT_STORAGE', 'auto')
+    prompt_storage = os.getenv("PROMPT_CONTEXT_STORAGE", "auto")
     logger.info(f"  ✓ Prompt context storage: {prompt_storage}")
 
     # Architecture hub configuration
@@ -96,26 +115,30 @@ def validate_environment():
     logger.info(f"  ✓ Architecture hub web URL: {arch_hub_web_url}")
 
     # Git configuration
-    git_user = os.getenv('GIT_USER_NAME', 'Architecture Bot')
-    git_email = os.getenv('GIT_USER_EMAIL', 'architecture-bot@your-org.com')
+    git_user = os.getenv("GIT_USER_NAME", "Architecture Bot")
+    git_email = os.getenv("GIT_USER_EMAIL", "architecture-bot@your-org.com")
     logger.info(f"  ✓ Git user: {git_user} <{git_email}>")
 
     # Check for any missing DynamoDB table name (might be needed)
-    dynamodb_table = os.getenv('DYNAMODB_TABLE_NAME')
+    dynamodb_table = os.getenv("DYNAMODB_TABLE_NAME")
     if not dynamodb_table:
-        warnings.append("DYNAMODB_TABLE_NAME not set - some features may not work properly")
+        warnings.append(
+            "DYNAMODB_TABLE_NAME not set - some features may not work properly"
+        )
         logger.info("  ⚠ DynamoDB table name not set")
 
     # Configuration validation
     try:
-        chunk_size = int(os.getenv('WORKFLOW_CHUNK_SIZE', Config.WORKFLOW_CHUNK_SIZE))
+        chunk_size = int(os.getenv("WORKFLOW_CHUNK_SIZE", Config.WORKFLOW_CHUNK_SIZE))
         Config.validate_chunk_size(chunk_size)
         logger.info(f"  ✓ Workflow chunk size: {chunk_size}")
     except ValueError as e:
         errors.append(f"Invalid workflow chunk size: {e}")
 
     try:
-        sleep_hours = float(os.getenv('WORKFLOW_SLEEP_HOURS', Config.WORKFLOW_SLEEP_HOURS))
+        sleep_hours = float(
+            os.getenv("WORKFLOW_SLEEP_HOURS", Config.WORKFLOW_SLEEP_HOURS)
+        )
         Config.validate_sleep_hours(sleep_hours)
         logger.info(f"  ✓ Workflow sleep hours: {sleep_hours}")
     except ValueError as e:
@@ -146,6 +169,7 @@ def validate_environment():
 
     return errors, warnings
 
+
 def print_error_and_exit(errors, warnings):
     """Print validation errors and exit with appropriate status."""
     if errors:
@@ -161,18 +185,24 @@ def print_error_and_exit(errors, warnings):
             for warning in warnings:
                 print(f"    - {warning}", flush=True)
 
-        print("\n💡 Please set the required environment variables and try again.", flush=True)
+        print(
+            "\n💡 Please set the required environment variables and try again.",
+            flush=True,
+        )
         print("=" * 60, flush=True)
         sys.exit(1)
     elif warnings:
         print("=" * 60, flush=True)
         print("⚠ ENVIRONMENT VALIDATION PASSED WITH WARNINGS", flush=True)
         print("=" * 60, flush=True)
-        print("The worker can start, but consider addressing these warnings:", flush=True)
+        print(
+            "The worker can start, but consider addressing these warnings:", flush=True
+        )
         for warning in warnings:
             print(f"  - {warning}", flush=True)
         print("Continuing in 3 seconds...", flush=True)
         print("=" * 60, flush=True)
+
 
 async def main():
     """
@@ -206,6 +236,7 @@ async def main():
     # Import the investigate worker and run it
     try:
         from investigate_worker import main as investigate_main
+
         await investigate_main()
     except ImportError as e:
         logger.error(f"Failed to import investigate_worker: {e}")
@@ -217,9 +248,13 @@ async def main():
         print("  - temporalio", flush=True)
         print("  - boto3", flush=True)
         print("  - anthropic", flush=True)
-        print("Run 'pip install -r requirements.txt' or use your package manager", flush=True)
+        print(
+            "Run 'pip install -r requirements.txt' or use your package manager",
+            flush=True,
+        )
         print("=" * 60, flush=True)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
