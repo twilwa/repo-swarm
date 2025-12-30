@@ -163,16 +163,26 @@ class GitRepositoryManager:
             "not authorized",
             "forbidden",
             "403",
+            # New indicators for fine-grained token errors
+            "resource not accessible",  # GitHub API error
+            "does not have the required permissions",  # Fine-grained PAT insufficient permissions
+            "fine-grained personal access token",  # Generic fine-grained errors
         ]
         return any(indicator in error_lower for indicator in indicators)
 
     def _build_permission_error_message(
-        self, operation: str, token_type, permission_hint: str | None = None
+        self,
+        operation: str,
+        token_type,
+        permission_hint: str | None = None,
+        include_docs_link: bool = False,
     ) -> str:
-        """Build a permission error message that includes token type context."""
+        """Build a permission error message that includes token type context and optional docs link."""
         from .github_token_utils import GitHubTokenType
 
         token_label = self._token_type_label(token_type)
+
+        # Build base message based on token type
         if token_type in (
             GitHubTokenType.FINE_GRAINED_USER,
             GitHubTokenType.FINE_GRAINED_PAT,
@@ -180,15 +190,27 @@ class GitRepositoryManager:
             message = f"{operation}: Fine-grained token ({token_label}) lacks repository access permissions."
             if permission_hint:
                 message = f"{message} {permission_hint}"
+
+            # Add documentation link if requested
+            if include_docs_link:
+                docs_url = "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token"
+                message = f"{message}\n\nFor help configuring token permissions, see: {docs_url}"
+
             return message
 
         if token_type == GitHubTokenType.CLASSIC:
-            return (
+            message = (
                 f"{operation}: CLASSIC token authentication failed. "
                 "Please check your GITHUB_TOKEN."
             )
+            if permission_hint:
+                message = f"{message} {permission_hint}"
+            return message
 
-        return f"{operation}: Authentication failed. Please check your GITHUB_TOKEN."
+        message = f"{operation}: Authentication failed. Please check your GITHUB_TOKEN."
+        if permission_hint:
+            message = f"{message} {permission_hint}"
+        return message
 
     def _is_existing_repo(self, repo_dir: str) -> bool:
         """Check if a directory contains a valid Git repository."""
@@ -286,6 +308,7 @@ class GitRepositoryManager:
                             "Failed to clone repository",
                             token_type,
                             "Ensure the token includes this repository and has Contents (read) permission.",
+                            include_docs_link=True,
                         )
                     )
 
@@ -366,6 +389,7 @@ class GitRepositoryManager:
                         "Shallow clone failed",
                         token_type,
                         "Ensure the token includes this repository and has Contents (read) permission.",
+                        include_docs_link=True,
                     )
                 )
             if self.github_token and self.github_token in error_msg:
@@ -476,6 +500,7 @@ class GitRepositoryManager:
                         "Minimal clone failed",
                         token_type,
                         "Ensure the token includes this repository and has Contents (read) permission.",
+                        include_docs_link=True,
                     )
                 )
             if self.github_token and self.github_token in error_msg:
@@ -553,6 +578,7 @@ class GitRepositoryManager:
                             "Failed to push changes",
                             token_type,
                             "Ensure the token includes this repository and has Contents (write) permission.",
+                            include_docs_link=True,
                         ),
                         "stderr": error_msg,
                     }
