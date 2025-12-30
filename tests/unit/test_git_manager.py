@@ -2,6 +2,7 @@
 # ABOUTME: Validates token detection, validation, and backward compatibility
 
 import os
+import subprocess
 import sys
 from unittest.mock import MagicMock, Mock, patch
 
@@ -233,11 +234,128 @@ class TestValidateGitHubToken:
 
             # Should use Bearer format for fine-grained tokens
             auth_header = headers.get("Authorization", "")
-            assert "Bearer" in auth_header or "token" in auth_header
+            assert auth_header == f"Bearer {valid_user_token}"
+
+    def test_classic_token_format_in_api_call(self, git_manager):
+        """Test that API call uses token format for classic tokens."""
+        valid_classic_token = "ghp_" + "a" * 40
+        git_manager.github_token = valid_classic_token
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"login": "testuser"}
+            mock_get.return_value = mock_response
+
+            git_manager.validate_github_token()
+
+            call_args = mock_get.call_args
+            headers = call_args.kwargs.get("headers") or call_args[1].get("headers")
+
+            auth_header = headers.get("Authorization", "")
+            assert auth_header == f"token {valid_classic_token}"
 
     def test_token_type_detection_priority(self, git_manager):
         """Test that github_pat_ prefix has priority over ghu_."""
         # This tests the priority of token detection
+
+
+class TestGitAuthentication:
+    """Test Git URL authentication and permission error handling."""
+
+    @pytest.fixture
+    def mock_logger(self):
+        """Create a mock logger."""
+        return Mock()
+
+    @pytest.fixture
+    def git_manager(self, mock_logger):
+        """Create GitRepositoryManager instance with mocked logger."""
+        return GitRepositoryManager(mock_logger)
+
+    def test_add_authentication_classic_token(self, git_manager):
+        """Test ghp_ token gets embedded in GitHub HTTPS URL."""
+        token = "ghp_" + "a" * 40
+        git_manager.github_token = token
+
+        url = "https://github.com/org/repo.git"
+        auth_url = git_manager._add_authentication(url)
+
+        assert auth_url == f"https://{token}@github.com/org/repo.git"
+
+    def test_add_authentication_fine_grained_pat(self, git_manager):
+        """Test github_pat_ token gets embedded in GitHub HTTPS URL."""
+        token = "github_pat_" + "a" * 25
+        git_manager.github_token = token
+
+        url = "https://github.com/org/repo.git"
+        auth_url = git_manager._add_authentication(url)
+
+        assert auth_url == f"https://{token}@github.com/org/repo.git"
+
+    def test_add_authentication_fine_grained_user(self, git_manager):
+        """Test ghu_ token gets embedded in GitHub HTTPS URL."""
+        token = "ghu_" + "a" * 15
+        git_manager.github_token = token
+
+        url = "https://github.com/org/repo.git"
+        auth_url = git_manager._add_authentication(url)
+
+        assert auth_url == f"https://{token}@github.com/org/repo.git"
+
+    def test_clone_permission_error_fine_grained_pat(self, git_manager):
+        """Test clone permission error includes fine-grained token type."""
+        token = "github_pat_" + "a" * 25
+        git_manager.github_token = token
+
+        auth_url = git_manager._add_authentication("https://github.com/org/repo.git")
+
+        with patch.object(git_manager, "_ensure_clean_directory"), patch(
+            "git.Repo.clone_from"
+        ) as mock_clone:
+            import git
+
+            mock_clone.side_effect = git.exc.GitCommandError(
+                "clone",
+                128,
+                stderr="remote: Repository not found.\nfatal: repository not found",
+            )
+
+            with pytest.raises(Exception) as exc_info:
+                git_manager._clone_repository(auth_url, "/tmp/repo")
+
+        error_message = str(exc_info.value)
+        assert "Fine-grained token" in error_message
+        assert "FINE_GRAINED_PAT" in error_message
+
+    def test_push_permission_error_fine_grained_user(self, git_manager):
+        """Test push permission error includes fine-grained token type."""
+        token = "ghu_" + "a" * 15
+        git_manager.github_token = token
+
+        def run_side_effect(cmd, *args, **kwargs):
+            if cmd[:3] == ["git", "remote", "get-url"]:
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="https://github.com/org/repo.git\n", stderr=""
+                )
+            if cmd[:3] == ["git", "remote", "set-url"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+            if cmd[:2] == ["git", "push"]:
+                return subprocess.CompletedProcess(
+                    cmd,
+                    1,
+                    stdout="",
+                    stderr="remote: Permission to org/repo denied",
+                )
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with patch("investigator.core.git_manager.subprocess.run") as mock_run:
+            mock_run.side_effect = run_side_effect
+            result = git_manager.push_with_authentication("/tmp/repo", branch="main")
+
+        assert result["status"] == "failed"
+        assert "Fine-grained token" in result["message"]
+        assert "FINE_GRAINED_USER" in result["message"]
         valid_pat_token = "github_pat_" + "a" * 25
         git_manager.github_token = valid_pat_token
 

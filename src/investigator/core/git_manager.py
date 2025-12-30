@@ -132,6 +132,64 @@ class GitRepositoryManager:
         self.logger.debug("Added GitHub token authentication to repository URL")
         return auth_url
 
+    def _get_token_type(self):
+        """Return detected GitHub token type for diagnostics."""
+        from .github_token_utils import GitHubTokenType, detect_github_token_type
+
+        if not self.github_token:
+            return GitHubTokenType.UNKNOWN
+
+        try:
+            return detect_github_token_type(self.github_token)
+        except TypeError:
+            return GitHubTokenType.UNKNOWN
+
+    def _token_type_label(self, token_type) -> str:
+        """Return human-readable token type label."""
+        return token_type.value if hasattr(token_type, "value") else str(token_type)
+
+    def _is_permission_error(self, error_msg: str) -> bool:
+        """Detect permission/authentication errors in git output."""
+        if not error_msg:
+            return False
+
+        error_lower = error_msg.lower()
+        indicators = [
+            "authentication failed",
+            "repository not found",
+            "permission denied",
+            "permission to",  # Matches "Permission to org/repo denied"
+            "access denied",
+            "not authorized",
+            "forbidden",
+            "403",
+        ]
+        return any(indicator in error_lower for indicator in indicators)
+
+    def _build_permission_error_message(
+        self, operation: str, token_type, permission_hint: str | None = None
+    ) -> str:
+        """Build a permission error message that includes token type context."""
+        from .github_token_utils import GitHubTokenType
+
+        token_label = self._token_type_label(token_type)
+        if token_type in (
+            GitHubTokenType.FINE_GRAINED_USER,
+            GitHubTokenType.FINE_GRAINED_PAT,
+        ):
+            message = f"{operation}: Fine-grained token ({token_label}) lacks repository access permissions."
+            if permission_hint:
+                message = f"{message} {permission_hint}"
+            return message
+
+        if token_type == GitHubTokenType.CLASSIC:
+            return (
+                f"{operation}: CLASSIC token authentication failed. "
+                "Please check your GITHUB_TOKEN."
+            )
+
+        return f"{operation}: Authentication failed. Please check your GITHUB_TOKEN."
+
     def _is_existing_repo(self, repo_dir: str) -> bool:
         """Check if a directory contains a valid Git repository."""
         return os.path.exists(repo_dir) and os.path.exists(
@@ -220,14 +278,18 @@ class GitRepositoryManager:
                             f"Failed to clone repository even with shallow clone: {str(shallow_error)}"
                         )
 
-                # Don't include the full error message as it might contain the token
-                if self.github_token and "Authentication failed" in str(e):
+                error_msg = str(e)
+                if self._is_permission_error(error_msg):
+                    token_type = self._get_token_type()
                     raise Exception(
-                        "Failed to clone repository: Authentication failed. Please check your GITHUB_TOKEN."
+                        self._build_permission_error_message(
+                            "Failed to clone repository",
+                            token_type,
+                            "Ensure the token includes this repository and has Contents (read) permission.",
+                        )
                     )
 
                 # Sanitize error message to remove any tokens
-                error_msg = str(e)
                 if self.github_token and self.github_token in error_msg:
                     error_msg = error_msg.replace(self.github_token, "***HIDDEN***")
                 raise Exception(f"Failed to clone repository: {error_msg}")
@@ -297,6 +359,15 @@ class GitRepositoryManager:
 
             # Clean up error message to not expose token
             error_msg = e.stderr
+            if self._is_permission_error(error_msg):
+                token_type = self._get_token_type()
+                raise Exception(
+                    self._build_permission_error_message(
+                        "Shallow clone failed",
+                        token_type,
+                        "Ensure the token includes this repository and has Contents (read) permission.",
+                    )
+                )
             if self.github_token and self.github_token in error_msg:
                 error_msg = error_msg.replace(self.github_token, "***HIDDEN***")
 
@@ -398,6 +469,15 @@ class GitRepositoryManager:
         except subprocess.CalledProcessError as e:
             # Clean up error message to not expose token
             error_msg = str(e)
+            if self._is_permission_error(error_msg):
+                token_type = self._get_token_type()
+                raise Exception(
+                    self._build_permission_error_message(
+                        "Minimal clone failed",
+                        token_type,
+                        "Ensure the token includes this repository and has Contents (read) permission.",
+                    )
+                )
             if self.github_token and self.github_token in error_msg:
                 error_msg = error_msg.replace(self.github_token, "***HIDDEN***")
 
@@ -435,19 +515,16 @@ class GitRepositoryManager:
                     self.logger.info(f"Current remote URL: {safe_url}")
 
                     # Add authentication if not already present
-                    if "github.com" in current_url and "@" not in current_url:
-                        if current_url.startswith("https://"):
-                            auth_url = current_url.replace(
-                                "https://", f"https://{self.github_token}@"
-                            )
-                            self.logger.info(
-                                "Updating remote URL with GitHub token for push"
-                            )
-                            subprocess.run(
-                                ["git", "remote", "set-url", "origin", auth_url],
-                                cwd=repo_dir,
-                                check=True,
-                            )
+                    auth_url = self._add_authentication(current_url)
+                    if auth_url != current_url:
+                        self.logger.info(
+                            "Updating remote URL with GitHub token for push"
+                        )
+                        subprocess.run(
+                            ["git", "remote", "set-url", "origin", auth_url],
+                            cwd=repo_dir,
+                            check=True,
+                        )
                     else:
                         self.logger.info(
                             "Remote URL already has authentication or is not a GitHub HTTPS URL"
@@ -468,6 +545,17 @@ class GitRepositoryManager:
             if push_result.returncode != 0:
                 # Sanitize error message to avoid exposing tokens
                 error_msg = push_result.stderr
+                if self._is_permission_error(error_msg):
+                    token_type = self._get_token_type()
+                    return {
+                        "status": "failed",
+                        "message": self._build_permission_error_message(
+                            "Failed to push changes",
+                            token_type,
+                            "Ensure the token includes this repository and has Contents (write) permission.",
+                        ),
+                        "stderr": error_msg,
+                    }
                 if self.github_token and self.github_token in error_msg:
                     error_msg = error_msg.replace(self.github_token, "***HIDDEN***")
 
@@ -556,9 +644,13 @@ class GitRepositoryManager:
             # Use Bearer format for fine-grained tokens, token format for classic
             if token_type == GitHubTokenType.CLASSIC:
                 auth_header = f"token {self.github_token}"
-            else:
-                # Fine-grained tokens (FINE_GRAINED_USER, FINE_GRAINED_PAT) use Bearer
+            elif token_type in {
+                GitHubTokenType.FINE_GRAINED_USER,
+                GitHubTokenType.FINE_GRAINED_PAT,
+            }:
                 auth_header = f"Bearer {self.github_token}"
+            else:
+                auth_header = f"token {self.github_token}"
 
             headers = {
                 "Authorization": auth_header,

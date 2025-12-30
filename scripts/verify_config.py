@@ -6,27 +6,30 @@ This script validates all configuration values from config.py and tests
 repository access using git_manager.py when possible.
 """
 
+import asyncio
 import os
 import sys
-import asyncio
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Tuple
+
 import requests
 
 # Add src to path so we can import our modules
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src'))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 from investigator.core.config import Config
 from investigator.core.git_manager import GitRepositoryManager
 
 try:
     from rich.console import Console
-    from rich.table import Table
     from rich.panel import Panel
+    from rich.table import Table
     from rich.text import Text
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
+
 
 class ConfigVerifier:
     """Verifies RepoSwarm configuration and tests repository access."""
@@ -38,6 +41,8 @@ class ConfigVerifier:
         self.errors = []
         self.warnings = []
         self.successes = []
+        self.github_token_type = None
+        self.github_token_format_valid = None
 
     def verify(self):
         """Run all verification checks."""
@@ -63,29 +68,65 @@ class ConfigVerifier:
     def _print_header(self):
         """Print the verification header."""
         if self.console:
-            self.console.print(Panel.fit("🔍 REPOSWARM CONFIGURATION VERIFICATION",
-                                       style="bold blue"))
+            self.console.print(
+                Panel.fit("🔍 REPOSWARM CONFIGURATION VERIFICATION", style="bold blue")
+            )
         else:
             print("🔍 REPOSWARM CONFIGURATION VERIFICATION")
             print("=" * 50)
 
     def _initialize_git_manager(self):
         """Initialize Git manager if GitHub token is available."""
-        github_token = os.getenv('GITHUB_TOKEN')
+        github_token = os.getenv("GITHUB_TOKEN")
         if github_token:
             # Create a simple logger for the git manager
             import logging
-            logger = logging.getLogger('verify-config-git')
+
+            logger = logging.getLogger("verify-config-git")
             logger.setLevel(logging.INFO)
             if not logger.handlers:
                 handler = logging.StreamHandler()
-                handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+                handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
                 logger.addHandler(handler)
 
             self.git_manager = GitRepositoryManager(logger)
             self._add_success("GitHub token found and GitRepositoryManager initialized")
         else:
-            self._add_warning("No GitHub token found - repository access testing will be limited")
+            self._add_warning(
+                "No GitHub token found - repository access testing will be limited"
+            )
+
+    def _format_token_type(self, token_type) -> str:
+        """Return a human-friendly token type label."""
+        from investigator.core.github_token_utils import GitHubTokenType
+
+        if token_type == GitHubTokenType.CLASSIC:
+            return "Classic PAT (ghp_)"
+        if token_type == GitHubTokenType.FINE_GRAINED_USER:
+            return "Fine-grained user token (ghu_)"
+        if token_type == GitHubTokenType.FINE_GRAINED_PAT:
+            return "Fine-grained PAT (github_pat_)"
+        return "Unknown token type"
+
+    def _is_fine_grained_token(self) -> bool:
+        """Return True when the detected token type is fine-grained."""
+        from investigator.core.github_token_utils import GitHubTokenType
+
+        return self.github_token_type in (
+            GitHubTokenType.FINE_GRAINED_USER,
+            GitHubTokenType.FINE_GRAINED_PAT,
+        )
+
+    def _add_fine_grained_warning(self, context: str = ""):
+        """Warn users about fine-grained token permissions."""
+        if not self._is_fine_grained_token():
+            return
+
+        token_label = self._format_token_type(self.github_token_type)
+        suffix = f" ({context})" if context else ""
+        self._add_warning(
+            f"Using {token_label} - ensure it has repo access and required permissions{suffix}"
+        )
 
     def _run_verification_checks(self):
         """Run all verification checks."""
@@ -171,9 +212,9 @@ class ConfigVerifier:
         from investigator.core.config import Config
 
         # Show what values are being used
-        arch_hub_name = os.getenv('ARCH_HUB_REPO_NAME', Config.ARCH_HUB_REPO_NAME)
-        arch_hub_base = os.getenv('ARCH_HUB_BASE_URL', Config.ARCH_HUB_BASE_URL)
-        arch_hub_files_dir = os.getenv('ARCH_HUB_FILES_DIR', Config.ARCH_HUB_FILES_DIR)
+        arch_hub_name = os.getenv("ARCH_HUB_REPO_NAME", Config.ARCH_HUB_REPO_NAME)
+        arch_hub_base = os.getenv("ARCH_HUB_BASE_URL", Config.ARCH_HUB_BASE_URL)
+        arch_hub_files_dir = os.getenv("ARCH_HUB_FILES_DIR", Config.ARCH_HUB_FILES_DIR)
 
         print(f"Architecture Hub Name: {arch_hub_name}")
         print(f"Architecture Hub Base URL: {arch_hub_base}")
@@ -193,8 +234,18 @@ class ConfigVerifier:
             return
 
         # Check token format
-        print(f"GitHub token format check: {github_token[:10]}... (length: {len(github_token)})")
-        print(f"Token starts with 'ghp_': {github_token.startswith('ghp_')}")
+        print(
+            f"GitHub token format check: {github_token[:10]}... (length: {len(github_token)})"
+        )
+        try:
+            from investigator.core.github_token_utils import validate_github_token
+
+            format_result = validate_github_token(github_token)
+            token_label = self._format_token_type(format_result["token_type"])
+            format_valid = "valid" if format_result["valid"] else "invalid"
+            print(f"Token type: {token_label} ({format_valid} format)")
+        except Exception as e:
+            print(f"Token type detection failed: {e}")
 
         try:
             import requests
@@ -205,9 +256,9 @@ class ConfigVerifier:
 
             # Test API access first
             api_headers = {
-                'Authorization': f'token {github_token}',
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'RepoSwarm/1.0'
+                "Authorization": f"token {github_token}",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "RepoSwarm/1.0",
             }
 
             print("Testing GitHub API access...")
@@ -218,7 +269,9 @@ class ConfigVerifier:
                 try:
                     repo_data = api_response.json()
                     print(f"Repository name: {repo_data.get('name', 'Unknown')}")
-                    print(f"Repository owner: {repo_data.get('owner', {}).get('login', 'Unknown')}")
+                    print(
+                        f"Repository owner: {repo_data.get('owner', {}).get('login', 'Unknown')}"
+                    )
                     print(f"Private: {repo_data.get('private', 'Unknown')}")
                     print(f"Permissions: {repo_data.get('permissions', {})}")
                 except Exception as json_e:
@@ -232,16 +285,22 @@ class ConfigVerifier:
                 print("Testing API access without token (for public repos)...")
                 api_response_no_auth = requests.get(api_url, timeout=10)
                 if api_response_no_auth.status_code == 200:
-                    print("✅ Repository is public and accessible without authentication")
+                    print(
+                        "✅ Repository is public and accessible without authentication"
+                    )
                     try:
                         repo_data = api_response_no_auth.json()
                         print(f"Repository name: {repo_data.get('name', 'Unknown')}")
-                        print(f"Repository owner: {repo_data.get('owner', {}).get('login', 'Unknown')}")
+                        print(
+                            f"Repository owner: {repo_data.get('owner', {}).get('login', 'Unknown')}"
+                        )
                         print(f"Private: {repo_data.get('private', 'Unknown')}")
                     except Exception as json_e:
                         print(f"❌ Failed to parse public API response: {json_e}")
                 else:
-                    print(f"❌ Repository not accessible even without auth (HTTP {api_response_no_auth.status_code})")
+                    print(
+                        f"❌ Repository not accessible even without auth (HTTP {api_response_no_auth.status_code})"
+                    )
 
         except Exception as e:
             print(f"❌ Failed to test API: {e}")
@@ -250,13 +309,15 @@ class ConfigVerifier:
         try:
             print("\nTesting git URL format...")
             git_url = constructed_url
-            if not git_url.endswith('.git'):
-                git_url += '.git'
+            if not git_url.endswith(".git"):
+                git_url += ".git"
 
             print(f"Git URL to test: {git_url}")
 
             # Try to access the git repository via HTTP (without auth for basic connectivity)
-            test_url = git_url.replace('.git', '') + '/info/refs?service=git-upload-pack'
+            test_url = (
+                git_url.replace(".git", "") + "/info/refs?service=git-upload-pack"
+            )
             print(f"Testing git service: {test_url}")
 
             # Test without auth first to see if repo is public
@@ -270,10 +331,14 @@ class ConfigVerifier:
                 if git_response.status_code == 200:
                     print("✅ Git repository is accessible with authentication")
                 else:
-                    print(f"❌ Git repository not accessible with authentication (HTTP {git_response.status_code})")
+                    print(
+                        f"❌ Git repository not accessible with authentication (HTTP {git_response.status_code})"
+                    )
                     print(f"Response: {git_response.text[:200]}...")
             else:
-                print(f"❌ Git repository not accessible (HTTP {git_response.status_code})")
+                print(
+                    f"❌ Git repository not accessible (HTTP {git_response.status_code})"
+                )
                 print(f"Response: {git_response.text[:200]}...")
 
         except Exception as e:
@@ -283,7 +348,7 @@ class ConfigVerifier:
     def _check_claude_model(self) -> Tuple[str, str, str, str]:
         """Check Claude model configuration."""
         try:
-            claude_model = os.getenv('CLAUDE_MODEL', self.config.CLAUDE_MODEL)
+            claude_model = os.getenv("CLAUDE_MODEL", self.config.CLAUDE_MODEL)
             Config.validate_claude_model(claude_model)
             self._add_success(f"Claude model: {claude_model}")
             return "✅", "Model", claude_model, "Valid"
@@ -294,7 +359,7 @@ class ConfigVerifier:
     def _check_claude_tokens(self) -> Tuple[str, str, str, str]:
         """Check Claude max tokens configuration."""
         try:
-            max_tokens = int(os.getenv('MAX_TOKENS', self.config.MAX_TOKENS))
+            max_tokens = int(os.getenv("MAX_TOKENS", self.config.MAX_TOKENS))
             Config.validate_max_tokens(max_tokens)
             self._add_success(f"Max tokens: {max_tokens}")
             return "✅", "Max Tokens", str(max_tokens), "Valid"
@@ -304,7 +369,7 @@ class ConfigVerifier:
 
     def _check_claude_api_key(self) -> Tuple[str, str, str, str]:
         """Check Claude API key presence."""
-        api_key = os.getenv('ANTHROPIC_API_KEY')
+        api_key = os.getenv("ANTHROPIC_API_KEY")
         if api_key:
             self._add_success("Anthropic API key found")
             return "✅", "API Key", "***HIDDEN***", "Present"
@@ -352,27 +417,29 @@ class ConfigVerifier:
 
     def _check_default_org(self) -> Tuple[str, str, str, str]:
         """Check default organization."""
-        default_org = os.getenv('DEFAULT_ORG_NAME', self.config.DEFAULT_ORG_NAME)
+        default_org = os.getenv("DEFAULT_ORG_NAME", self.config.DEFAULT_ORG_NAME)
         self._add_success(f"Default organization: {default_org}")
         return "✅", "Default Organization", default_org, "Configured"
 
     def _check_default_repo(self) -> Tuple[str, str, str, str]:
         """Check default repository."""
-        default_repo = os.getenv('DEFAULT_REPO_URL', self.config.DEFAULT_REPO_URL)
+        default_repo = os.getenv("DEFAULT_REPO_URL", self.config.DEFAULT_REPO_URL)
         self._add_success(f"Default repository: {default_repo}")
         return "✅", "Default Repository", default_repo, "Configured"
 
     def _check_git_user_config(self) -> Tuple[str, str, str, str]:
         """Check Git user configuration."""
-        git_user = os.getenv('GIT_USER_NAME', 'Architecture Bot')
-        git_email = os.getenv('GIT_USER_EMAIL', 'architecture-bot@your-org.com')
+        git_user = os.getenv("GIT_USER_NAME", "Architecture Bot")
+        git_email = os.getenv("GIT_USER_EMAIL", "architecture-bot@your-org.com")
         self._add_success(f"Git user: {git_user} <{git_email}>")
         return "✅", "Git User", f"{git_user} <{git_email}>", "Configured"
 
     def _check_workflow_chunk_size(self) -> Tuple[str, str, str, str]:
         """Check workflow chunk size configuration."""
         try:
-            chunk_size = int(os.getenv('WORKFLOW_CHUNK_SIZE', self.config.WORKFLOW_CHUNK_SIZE))
+            chunk_size = int(
+                os.getenv("WORKFLOW_CHUNK_SIZE", self.config.WORKFLOW_CHUNK_SIZE)
+            )
             Config.validate_chunk_size(chunk_size)
             self._add_success(f"Workflow chunk size: {chunk_size}")
             return "✅", "Chunk Size", str(chunk_size), "Valid"
@@ -383,7 +450,9 @@ class ConfigVerifier:
     def _check_workflow_sleep_hours(self) -> Tuple[str, str, str, str]:
         """Check workflow sleep hours configuration."""
         try:
-            sleep_hours = float(os.getenv('WORKFLOW_SLEEP_HOURS', self.config.WORKFLOW_SLEEP_HOURS))
+            sleep_hours = float(
+                os.getenv("WORKFLOW_SLEEP_HOURS", self.config.WORKFLOW_SLEEP_HOURS)
+            )
             Config.validate_sleep_hours(sleep_hours)
             self._add_success(f"Workflow sleep hours: {sleep_hours}")
             return "✅", "Sleep Hours", str(sleep_hours), "Valid"
@@ -398,9 +467,27 @@ class ConfigVerifier:
             self._display_table("🔐 REPOSITORY ACCESS TEST", results)
             return
 
+        github_token = os.getenv("GITHUB_TOKEN")
+        from investigator.core.github_token_utils import (
+            validate_github_token as util_validate_token,
+        )
+
+        format_result = util_validate_token(github_token)
+        self.github_token_type = format_result["token_type"]
+        self.github_token_format_valid = format_result["valid"]
+
+        token_type_label = self._format_token_type(self.github_token_type)
+        token_type_status = "✅" if self.github_token_format_valid else "❌"
+        token_type_details = (
+            "Format valid" if self.github_token_format_valid else "Format invalid"
+        )
+
+        if self._is_fine_grained_token():
+            self._add_fine_grained_warning()
+
         # Test GitHub token
         token_result = self.git_manager.validate_github_token()
-        if token_result['status'] == 'valid':
+        if token_result["status"] == "valid":
             self._add_success(f"GitHub token valid for user: {token_result['user']}")
             token_status = "✅"
             token_value = f"{token_result['user']}"
@@ -409,22 +496,44 @@ class ConfigVerifier:
             self._add_error(f"GitHub token invalid: {token_result['message']}")
             token_status = "❌"
             token_value = "INVALID"
-            token_details = token_result['message']
+            token_details = token_result["message"]
+            status_code = token_result.get("status_code")
+            if self._is_fine_grained_token() and status_code in (403, 404):
+                self._add_fine_grained_warning(
+                    "permission checks failed with GitHub API"
+                )
 
         # Test repository access
         repo_checks = [
-            (self._test_github_token_access, "GitHub Token", token_status, token_value, token_details),
+            (
+                self._test_github_token_access,
+                "Token Type",
+                token_type_status,
+                token_type_label,
+                token_type_details,
+            ),
+            (
+                self._test_github_token_access,
+                "GitHub Token",
+                token_status,
+                token_value,
+                token_details,
+            ),
         ]
 
         # Test architecture hub access
         arch_hub_url = self.config.get_arch_hub_repo_url()
-        if 'github.com' in arch_hub_url:
-            repo_checks.append((self._test_arch_hub_access, "Architecture Hub", "", "", ""))
+        if "github.com" in arch_hub_url:
+            repo_checks.append(
+                (self._test_arch_hub_access, "Architecture Hub", "", "", "")
+            )
 
         # Test default repo access
-        default_repo = os.getenv('DEFAULT_REPO_URL', self.config.DEFAULT_REPO_URL)
-        if 'github.com' in default_repo:
-            repo_checks.append((self._test_default_repo_access, "Default Repository", "", "", ""))
+        default_repo = os.getenv("DEFAULT_REPO_URL", self.config.DEFAULT_REPO_URL)
+        if "github.com" in default_repo:
+            repo_checks.append(
+                (self._test_default_repo_access, "Default Repository", "", "", "")
+            )
 
         # Run repository tests
         results = []
@@ -445,44 +554,96 @@ class ConfigVerifier:
         """Test architecture hub repository access."""
         arch_hub_url = self.config.get_arch_hub_repo_url()
         # Extract repo name from URL for display
-        repo_display = '/'.join(arch_hub_url.split('/')[-2:]) if '/' in arch_hub_url else arch_hub_url
+        repo_display = (
+            "/".join(arch_hub_url.split("/")[-2:])
+            if "/" in arch_hub_url
+            else arch_hub_url
+        )
         try:
             perm_result = self.git_manager.check_repository_permissions(arch_hub_url)
-            if perm_result['status'] == 'allowed':
+            if perm_result["status"] == "allowed":
                 self._add_success(f"Architecture Hub ({arch_hub_url}) access: Allowed")
                 return "✅", f"Arch Hub ({repo_display})", "PUSH ACCESS", "Granted"
-            elif perm_result['status'] == 'denied':
-                self._add_warning(f"Architecture Hub ({arch_hub_url}) access: Push denied (read-only access)")
+            elif perm_result["status"] == "denied":
+                self._add_warning(
+                    f"Architecture Hub ({arch_hub_url}) access: Push denied (read-only access)"
+                )
+                self._add_fine_grained_warning(
+                    f"arch hub access denied for {repo_display}"
+                )
                 return "⚠️", f"Arch Hub ({repo_display})", "READ ONLY", "Push denied"
-            elif perm_result['status'] == 'not_found':
-                self._add_warning(f"Architecture Hub ({arch_hub_url}) access: Repository not found")
-                return "⚠️", f"Arch Hub ({repo_display})", "NOT FOUND", "Repository not found"
+            elif perm_result["status"] == "not_found":
+                self._add_warning(
+                    f"Architecture Hub ({arch_hub_url}) access: Repository not found"
+                )
+                self._add_fine_grained_warning(
+                    f"arch hub not accessible for {repo_display}"
+                )
+                return (
+                    "⚠️",
+                    f"Arch Hub ({repo_display})",
+                    "NOT FOUND",
+                    "Repository not found",
+                )
             else:
-                self._add_warning(f"Architecture Hub ({arch_hub_url}) access: {perm_result['message']}")
-                return "⚠️", f"Arch Hub ({repo_display})", "UNKNOWN", perm_result['message']
+                self._add_warning(
+                    f"Architecture Hub ({arch_hub_url}) access: {perm_result['message']}"
+                )
+                return (
+                    "⚠️",
+                    f"Arch Hub ({repo_display})",
+                    "UNKNOWN",
+                    perm_result["message"],
+                )
         except Exception as e:
             self._add_warning(f"Architecture Hub access test failed: {str(e)}")
             return "⚠️", f"Arch Hub ({repo_display})", "TEST FAILED", str(e)
 
     def _test_default_repo_access(self) -> Tuple[str, str, str, str]:
         """Test default repository access."""
-        default_repo = os.getenv('DEFAULT_REPO_URL', self.config.DEFAULT_REPO_URL)
+        default_repo = os.getenv("DEFAULT_REPO_URL", self.config.DEFAULT_REPO_URL)
         # Extract repo name from URL for display
-        repo_display = default_repo.split('/')[-1] if '/' in default_repo else default_repo
+        repo_display = (
+            default_repo.split("/")[-1] if "/" in default_repo else default_repo
+        )
         try:
             perm_result = self.git_manager.check_repository_permissions(default_repo)
-            if perm_result['status'] == 'allowed':
-                self._add_success(f"Default Repository ({default_repo}) access: Allowed")
+            if perm_result["status"] == "allowed":
+                self._add_success(
+                    f"Default Repository ({default_repo}) access: Allowed"
+                )
                 return "✅", f"Default Repo ({repo_display})", "PUSH ACCESS", "Granted"
-            elif perm_result['status'] == 'denied':
-                self._add_warning(f"Default Repository ({default_repo}) access: Push denied (read-only access)")
+            elif perm_result["status"] == "denied":
+                self._add_warning(
+                    f"Default Repository ({default_repo}) access: Push denied (read-only access)"
+                )
+                self._add_fine_grained_warning(
+                    f"default repo access denied for {repo_display}"
+                )
                 return "⚠️", f"Default Repo ({repo_display})", "READ ONLY", "Push denied"
-            elif perm_result['status'] == 'not_found':
-                self._add_warning(f"Default Repository ({default_repo}) access: Repository not found")
-                return "⚠️", f"Default Repo ({repo_display})", "NOT FOUND", "Repository not found"
+            elif perm_result["status"] == "not_found":
+                self._add_warning(
+                    f"Default Repository ({default_repo}) access: Repository not found"
+                )
+                self._add_fine_grained_warning(
+                    f"default repo not accessible for {repo_display}"
+                )
+                return (
+                    "⚠️",
+                    f"Default Repo ({repo_display})",
+                    "NOT FOUND",
+                    "Repository not found",
+                )
             else:
-                self._add_warning(f"Default Repository ({default_repo}) access: {perm_result['message']}")
-                return "⚠️", f"Default Repo ({repo_display})", "UNKNOWN", perm_result['message']
+                self._add_warning(
+                    f"Default Repository ({default_repo}) access: {perm_result['message']}"
+                )
+                return (
+                    "⚠️",
+                    f"Default Repo ({repo_display})",
+                    "UNKNOWN",
+                    perm_result["message"],
+                )
         except Exception as e:
             self._add_warning(f"Default Repository access test failed: {str(e)}")
             return "⚠️", "Default Repository", "TEST FAILED", str(e)
@@ -507,7 +668,9 @@ class ConfigVerifier:
 
         self.console.print(table)
 
-    def _display_plain_table(self, title: str, results: List[Tuple[str, str, str, str]]):
+    def _display_plain_table(
+        self, title: str, results: List[Tuple[str, str, str, str]]
+    ):
         """Display table in plain text format."""
         print(f"\n{title}")
         print("-" * 80)
@@ -543,30 +706,51 @@ class ConfigVerifier:
 
         # Successes
         if self.successes:
-            self.console.print(Panel.fit("\n".join(f"✅ {success}" for success in self.successes),
-                                       title="SUCCESSFUL CONFIGURATION",
-                                       style="green"))
+            self.console.print(
+                Panel.fit(
+                    "\n".join(f"✅ {success}" for success in self.successes),
+                    title="SUCCESSFUL CONFIGURATION",
+                    style="green",
+                )
+            )
 
         # Warnings
         if self.warnings:
-            self.console.print(Panel.fit("\n".join(f"⚠️  {warning}" for warning in self.warnings),
-                                       title="WARNINGS",
-                                       style="yellow"))
+            self.console.print(
+                Panel.fit(
+                    "\n".join(f"⚠️  {warning}" for warning in self.warnings),
+                    title="WARNINGS",
+                    style="yellow",
+                )
+            )
 
         # Errors
         if self.errors:
-            self.console.print(Panel.fit("\n".join(f"❌ {error}" for error in self.errors),
-                                       title="ERRORS",
-                                       style="red"))
+            self.console.print(
+                Panel.fit(
+                    "\n".join(f"❌ {error}" for error in self.errors),
+                    title="ERRORS",
+                    style="red",
+                )
+            )
 
         # Results summary
         result_text = f"📈 RESULTS: {len(self.successes)} successes, {len(self.warnings)} warnings, {len(self.errors)} errors"
         if self.errors:
-            self.console.print(f"\n💡 Please fix the errors above before running the worker.", style="red")
+            self.console.print(
+                f"\n💡 Please fix the errors above before running the worker.",
+                style="red",
+            )
         elif self.warnings:
-            self.console.print(f"\n💡 Consider addressing the warnings for optimal performance.", style="yellow")
+            self.console.print(
+                f"\n💡 Consider addressing the warnings for optimal performance.",
+                style="yellow",
+            )
         else:
-            self.console.print(f"\n🎉 Configuration looks good! Ready to run the worker.", style="green")
+            self.console.print(
+                f"\n🎉 Configuration looks good! Ready to run the worker.",
+                style="green",
+            )
 
     def _print_plain_summary(self):
         """Print summary in plain text format."""
@@ -588,7 +772,9 @@ class ConfigVerifier:
             for error in self.errors:
                 print(f"   • {error}")
 
-        print(f"\n📈 RESULTS: {len(self.successes)} successes, {len(self.warnings)} warnings, {len(self.errors)} errors")
+        print(
+            f"\n📈 RESULTS: {len(self.successes)} successes, {len(self.warnings)} warnings, {len(self.errors)} errors"
+        )
 
         if self.errors:
             print("\n💡 Please fix the errors above before running the worker.")

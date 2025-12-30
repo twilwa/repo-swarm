@@ -210,7 +210,9 @@ RepoSwarm categorizes repositories into specialized types, each with tailored an
 **GitHub API**
 
 - **Purpose**: Repository cloning, metadata fetching, organization repo listing
-- **Authentication**: Personal Access Token via `GITHUB_TOKEN` (for private repos)
+- **Authentication**: `GITHUB_TOKEN` supports classic PATs (ghp*) and fine-grained tokens (ghu*, github*pat*\*) for private repos
+- **Fine-grained permissions**: Repository contents (read) and metadata (read); add extra read scopes only if needed
+- **Recommendation**: Prefer fine-grained tokens for least-privilege access
 - **Rate Limits**: 5000 requests/hour (authenticated), 60 requests/hour (unauthenticated)
 - **Docs**: https://docs.github.com/en/rest
 

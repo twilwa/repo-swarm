@@ -1,4 +1,5 @@
 # RepoSwarm🤖
+
 ![RepoSwarm](RepoSwarm1.jpg)
 
 🎬 **Architecture Overview (click to play)**  
@@ -6,17 +7,18 @@
 
 RepoSwarm is an AI powered multi-repo architecture discovery platform that generates its output in a specialized output repository that you can use for agent context.
 
-see example results repo at  [repo-swarm-sample-results-hub](https://github.com/royosherove/repo-swarm-sample-results-hub). 
+see example results repo at [repo-swarm-sample-results-hub](https://github.com/royosherove/repo-swarm-sample-results-hub).
 
 ## Credits
-RepoSwarm was born out of a hackathon we ran at Verbit, in which our team, comprised of [Moshe](https://github.com/mosher), [Idan](https://github.com/Idandos) and [Roy](https://github.com/royosherove) created this project together. 
+
+RepoSwarm was born out of a hackathon we ran at Verbit, in which our team, comprised of [Moshe](https://github.com/mosher), [Idan](https://github.com/Idandos) and [Roy](https://github.com/royosherove) created this project together.
 
 ## What's This For?
 
 RepoSwarm is an intelligent agentic-like engine that:
 
 - 🔍 Analyzes GitHub repositories using Claude Code SDK
-- 📝 Generates standardized `.arch.md` architecture files  
+- 📝 Generates standardized `.arch.md` architecture files
 - 🔄 Runs daily via Temporal workflows on repos with new commits
 - 💾 Caches results to avoid redundant analysis
 - Writes the results into a results repository that you configure
@@ -25,7 +27,7 @@ RepoSwarm is an intelligent agentic-like engine that:
 
 ## How It Works
 
-RepoSwarm runs as a Temporal workflow that automatically processes repositories and feeds  a configured targer repository.
+RepoSwarm runs as a Temporal workflow that automatically processes repositories and feeds a configured targer repository.
 
 ```mermaid
 graph TB
@@ -35,7 +37,7 @@ graph TB
     D -->|Cache in DynamoDB or file system| E[Store Results]
     E -->|Auto-commit| F[Results Repository]
     F -->|Query with AI| G[Reports & Insights]
-    
+
     style A fill:#e1f5fe,color:#000
     style B fill:#fff3e0,color:#000
     style F fill:#f3e5f5,color:#000
@@ -72,6 +74,7 @@ mise get-started
 ```
 
 This wizard will:
+
 - ✅ Create your `.env.local` file
 - ✅ Configure your Claude API key
 - ✅ Set up GitHub integration (optional)
@@ -125,6 +128,42 @@ mise investigate-one hello-world
 
 ## Configuration
 
+### GitHub Fine-Grained Personal Access Tokens
+
+RepoSwarm supports three GitHub token types: CLASSIC (`ghp_`), FINE*GRAINED_USER (`ghu*`), and FINE_GRAINED_PAT (`github*pat*`). Fine-grained PATs are recommended for better security.
+
+**Benefits of fine-grained tokens**
+
+- **Security**: narrower scopes reduce blast radius
+- **Granular permissions**: per-repo access with explicit permissions
+- **Expiration control**: set and enforce token lifetimes
+
+#### Generate a fine-grained PAT
+
+1. In GitHub, go to **Settings** → **Developer settings**.
+2. Select **Personal access tokens** → **Fine-grained tokens**.
+3. Click **Generate new token**.
+4. Set a **Token name** and **Expiration**.
+5. Under **Repository access**, choose **All repositories** or **Only select repositories**, then pick the repos RepoSwarm will analyze.
+6. Under **Permissions**, set:
+   - **Contents**: Read and write
+   - **Metadata**: Read-only
+7. Click **Generate token** and copy the token value.
+
+**Note:** Optional screenshots can live in `docs/screenshots/` if you want to add a visual walkthrough later.
+
+#### Required permissions
+
+- **Contents**: Read and write
+- **Metadata**: Read-only
+
+#### Troubleshooting permission errors
+
+- **"Resource not accessible by personal access token"**: confirm the repo is included under **Repository access** and permissions match the list above.
+- **"Not Found" or "Repository not found"**: the token lacks access to the repo or the repo is in a different org; update **Repository access** and verify org membership.
+- **"Requires write access to contents"**: ensure **Contents** is set to **Read and write**, not read-only.
+- **Token suddenly stops working**: check **Expiration** or whether the token was revoked.
+
 ### Adding Repositories
 
 Edit `prompts/repos.json` to add repositories for analysis:
@@ -138,7 +177,7 @@ Edit `prompts/repos.json` to add repositories for analysis:
       "description": "Main API service"
     },
     "my-frontend": {
-      "url": "https://github.com/org/my-frontend", 
+      "url": "https://github.com/org/my-frontend",
       "type": "frontend",
       "description": "React web app"
     }
@@ -164,6 +203,7 @@ Each type has a `prompts.json` that defines which analysis steps to run.
 RepoSwarm uses a logical naming convention for all mise tasks:
 
 ### Development Tasks (`dev-*`)
+
 ```bash
 mise dev-temporal          # Start Temporal server
 mise dev-dependencies      # Install Python dependencies
@@ -176,6 +216,7 @@ mise dev-repos-update     # Update repository list from GitHub
 ```
 
 ### Investigation Tasks (`investigate-*`)
+
 ```bash
 mise investigate-all      # Analyze all repositories locally
 mise investigate-one      # Analyze single repository locally
@@ -184,6 +225,7 @@ mise investigate-debug    # Analyze with detailed logging
 ```
 
 ### Testing Tasks (`test-*`)
+
 ```bash
 mise verify-config        # Validate configuration and test repository access
 mise test-all             # Run complete test suite
@@ -193,6 +235,7 @@ mise test-dynamodb        # Test DynamoDB functionality
 ```
 
 ### Docker Tasks (`docker-*`)
+
 ```bash
 mise docker-dev           # Build and run for development
 mise docker-debug         # Debug with verbose logging
@@ -200,6 +243,7 @@ mise docker-test-build    # Test Docker build process
 ```
 
 ### Maintenance Tasks
+
 ```bash
 mise cleanup-temp         # Clean temporary files
 mise monitor-workflow     # Check workflow status
@@ -273,11 +317,13 @@ For production deployments, you need to deploy Temporal workers that can run on 
 ### Temporal Worker Deployment
 
 **Key Concepts:**
+
 - **Worker**: A process that hosts workflow and activity implementations
 - **Task Queue**: Named queue where workers poll for tasks
 - **Temporal Server**: Orchestrates workflow execution and task distribution
 
 **Deployment Options:**
+
 1. **Local Development**: Run workers on your development machine
 2. **Company Servers**: Deploy workers to internal infrastructure
 3. **Cloud Infrastructure**: Deploy to any cloud provider (AWS, GCP, Azure, etc.)
@@ -309,6 +355,7 @@ For production environments:
 4. **Trigger via API**: Use Temporal client to start workflows
 
 **Example Worker Deployment:**
+
 ```bash
 # Run worker connecting to remote Temporal server
 TEMPORAL_SERVER_URL=your-temporal-server:7233 mise dev-worker
@@ -376,6 +423,7 @@ Cache invalidation happens when:
 #### Common Development Issues
 
 **Temporal Server Connection**
+
 ```bash
 # Check if Temporal server is running
 mise monitor-temporal
@@ -385,11 +433,13 @@ mise dev-temporal
 ```
 
 **Claude API Errors**
+
 - Verify API key: `echo $ANTHROPIC_API_KEY | head -c 10` (should show first 10 chars)
 - Check rate limits in your Anthropic dashboard
 - Ensure you're using a valid Claude model name
 
 **Test Failures**
+
 ```bash
 # Run specific test suites
 mise test-units              # Unit tests only
@@ -398,6 +448,7 @@ mise test-dynamodb           # DynamoDB tests
 ```
 
 **Clean Development Environment**
+
 ```bash
 # Stop all processes
 mise kill
@@ -434,10 +485,10 @@ mise cleanup-temp
 
 ---
 
-*Twin project: [repo-swarm-sample-results-hub](https://github.com/royosherove/repo-swarm-sample-results-hub) - Query and analyze the generated architecture documentation*
-
+_Twin project: [repo-swarm-sample-results-hub](https://github.com/royosherove/repo-swarm-sample-results-hub) - Query and analyze the generated architecture documentation_
 
 # License
+
 This project is licensed under the Polyform Noncommercial License 1.0.0.
 You may use, copy, and modify the code for non-commercial purposes only.
 For commercial licensing, please contact roy at osherove dot_com.
