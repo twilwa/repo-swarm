@@ -17,7 +17,7 @@ import json
 import os
 import subprocess  # nosec
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 
 @dataclass

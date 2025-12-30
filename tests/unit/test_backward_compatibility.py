@@ -286,7 +286,7 @@ class TestUsagePatternCompatibility(unittest.TestCase):
             {"role": "user", "content": "Follow-up message"},
         ]
 
-        response = sdk_client.messages_create(
+        sdk_client.messages_create(
             model="claude-opus-4-5-20251101", max_tokens=2000, messages=messages
         )
 

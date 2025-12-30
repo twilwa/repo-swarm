@@ -8,7 +8,6 @@ token validation status, and which environment variables are configured.
 
 import os
 import sys
-from pathlib import Path
 
 # Add src to path so we can import our modules
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))

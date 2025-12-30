@@ -1,15 +1,16 @@
 # ABOUTME: Unit tests for auth_detector.py authentication detection logic
 # ABOUTME: Tests OAuth and API key detection with priority ordering and error handling
 
+
 import pytest
-import os
+
 from src.investigator.core.auth_detector import (
+    MAX_TOKEN_LENGTH,
+    MIN_TOKEN_LENGTH,
+    SK_ANT_API03_PREFIX,
+    SK_ANT_OAT01_PREFIX,
     get_claude_authentication,
     validate_claude_credentials,
-    SK_ANT_OAT01_PREFIX,
-    SK_ANT_API03_PREFIX,
-    MIN_TOKEN_LENGTH,
-    MAX_TOKEN_LENGTH,
 )
 
 

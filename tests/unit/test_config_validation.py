@@ -1,8 +1,9 @@
 # ABOUTME: Unit tests for config.py validation methods
 # ABOUTME: Tests OAuth token validation and configuration validation logic
 
+
 import pytest
-import os
+
 from src.investigator.core.config import Config
 
 

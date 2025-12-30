@@ -4,7 +4,7 @@ Tests verify that both OAuth and API key authentication work end-to-end.
 """
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

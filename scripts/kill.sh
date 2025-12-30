@@ -44,11 +44,11 @@ sleep 1
 
 # Verify cleanup
 remaining=$(ps aux | grep -E "investigate_worker|temporal server start-dev" | grep -v grep | wc -l | tr -d ' ')
-if [ "$remaining" -eq 0 ]; then
+if [[ "${remaining}" -eq 0 ]]; then
 	echo ""
 	echo "✅ Cleanup complete! All processes terminated."
 else
 	echo ""
-	echo "⚠️  Warning: $remaining process(es) may still be running"
+	echo "⚠️  Warni$$${${${${${}}: $r}emai}ning process(es) may still be running"
 	echo "Run 'ps aux | grep -E \"investigate_worker|temporal\"' to check"
 fi

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 import subprocess
 import sys
@@ -24,7 +23,6 @@ async def update_repos_list() -> dict:
     Returns:
         Dictionary containing the update status and summary
     """
-    import json
     import subprocess
 
     activity.logger.info("Starting repository list update")
@@ -1392,7 +1390,6 @@ async def read_dependencies_activity(repo_path: str) -> dict:
     try:
         import glob
         import json
-        import os
         from pathlib import Path
 
         # Define dependency file patterns

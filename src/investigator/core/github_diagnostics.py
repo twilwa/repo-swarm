@@ -75,7 +75,7 @@ def diagnose_github_token(
         if token_type == GitHubTokenType.UNKNOWN:
             return DiagnosticResult(
                 status=DiagnosticStatus.ERROR,
-                message=f"Token has invalid format - doesn't match any known GitHub token pattern",
+                message="Token has invalid format - doesn't match any known GitHub token pattern",
                 issue_type=TokenIssueType.INVALID_FORMAT,
                 recommendations=[
                     "Verify you copied the complete token without extra spaces",
@@ -204,7 +204,7 @@ def diagnose_github_token(
                         message=f"Repository '{repository}' is not selected in fine-grained token settings",
                         issue_type=TokenIssueType.REPOSITORY_NOT_SELECTED,
                         recommendations=[
-                            f"Edit your token at https://github.com/settings/tokens",
+                            "Edit your token at https://github.com/settings/tokens",
                             f"In 'Repository access', select '{repository}'",
                             "Save changes and wait a few minutes for propagation",
                             "Alternatively, select 'All repositories' if appropriate",

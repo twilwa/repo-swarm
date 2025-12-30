@@ -3,10 +3,7 @@
 
 from unittest.mock import Mock, patch
 
-import pytest
-
 from src.investigator.core.github_diagnostics import (
-    DiagnosticResult,
     DiagnosticStatus,
     TokenIssueType,
     diagnose_github_token,

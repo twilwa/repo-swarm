@@ -11,7 +11,7 @@ import json
 import subprocess
 import sys
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 # Add the src directory to the path
 sys.path.append(

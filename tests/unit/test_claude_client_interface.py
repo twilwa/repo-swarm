@@ -397,7 +397,7 @@ class TestClientProtocolDefinition(unittest.TestCase):
         )
 
         # Get the method
-        method = getattr(IfaceProtocol, "messages_create")
+        method = IfaceProtocol.messages_create
 
         # Should have __annotations__
         self.assertTrue(hasattr(method, "__annotations__"))

@@ -6,11 +6,10 @@ This script validates all configuration values from config.py and tests
 repository access using git_manager.py when possible.
 """
 
-import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import List, Tuple
 
 import requests
 

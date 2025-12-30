@@ -1,8 +1,6 @@
 # ABOUTME: Unit tests to verify .env.example documents all authentication options
 # ABOUTME: Validates that OAuth and API key variables are documented with clear guidance
 
-import os
-import re
 from pathlib import Path
 
 

@@ -4,8 +4,6 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 # Add repo root and src to path
 REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))

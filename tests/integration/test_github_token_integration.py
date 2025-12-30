@@ -410,7 +410,7 @@ class TestGitHubTokenIntegration:
 
         # Make a few sequential requests
         responses = []
-        for i in range(3):
+        for _i in range(3):
             response = requests.get(
                 "https://api.github.com/user", headers=headers, timeout=10
             )
@@ -500,6 +500,6 @@ class TestGitHubTokenIntegration:
         }
 
         # Just document these for future developers
-        for token_type, specs in token_specs.items():
+        for _token_type, specs in token_specs.items():
             assert "prefix" in specs
             assert "auth_scheme" in specs

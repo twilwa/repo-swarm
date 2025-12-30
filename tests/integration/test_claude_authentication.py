@@ -23,8 +23,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from investigator.core.auth_detector import get_claude_authentication
-from investigator.core.claude_client_factory import create_claude_client
 from investigator.core.claude_cli_client import ClaudeCLIClient, MessageResponse
+from investigator.core.claude_client_factory import create_claude_client
 from investigator.core.claude_sdk_client import ClaudeSDKClient
 
 
