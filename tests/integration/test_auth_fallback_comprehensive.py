@@ -33,6 +33,36 @@ from investigator.core.claude_client_factory import create_claude_client
 from investigator.core.claude_sdk_client import ClaudeSDKClient
 
 
+def is_rate_limit_error(error_msg: str) -> bool:
+    """Check if error is due to rate limiting."""
+    rate_limit_indicators = [
+        "limit",
+        "quota",
+        "rate",
+        "resets",
+        "exceeded",
+        "too many requests",
+    ]
+    error_lower = str(error_msg).lower()
+    return any(indicator in error_lower for indicator in rate_limit_indicators)
+
+
+def skip_on_rate_limit(func):
+    """Decorator to skip tests when rate limited."""
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if is_rate_limit_error(str(e)):
+                pytest.skip(f"Rate limited: {e}")
+            raise
+
+    return wrapper
+
+
 class TestAuthenticationPriorityChain:
     """Test all combinations of credential precedence."""
 
@@ -194,6 +224,7 @@ class TestAuthenticationPriorityChain:
 class TestResponseStructureEquivalence:
     """Test SDK and CLI clients return equivalent response structures."""
 
+    @skip_on_rate_limit
     def test_response_content_structure_matches(self):
         """Test both clients return same content structure."""
         oauth = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv("CLAUDE_OAUTH_TOKEN")
@@ -246,6 +277,7 @@ class TestResponseStructureEquivalence:
         assert isinstance(oauth_response.content[0].text, str)
         assert isinstance(sdk_response.content[0].text, str)
 
+    @skip_on_rate_limit
     def test_response_metadata_structure_matches(self):
         """Test both clients return same metadata fields."""
         oauth = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv("CLAUDE_OAUTH_TOKEN")
@@ -292,6 +324,7 @@ class TestResponseStructureEquivalence:
         assert type(oauth_response.role) == type(sdk_response.role)
         assert type(oauth_response.model) == type(sdk_response.model)
 
+    @skip_on_rate_limit
     def test_both_clients_handle_same_prompts(self):
         """Test both clients successfully process identical prompts."""
         oauth = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv("CLAUDE_OAUTH_TOKEN")
@@ -434,6 +467,7 @@ class TestClientMethodCompatibility:
         assert callable(cli_client.messages_create)
         assert callable(sdk_client.messages_create)
 
+    @skip_on_rate_limit
     def test_both_clients_accept_same_parameters(self):
         """Test both clients accept same messages_create() parameters."""
         oauth = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv("CLAUDE_OAUTH_TOKEN")

@@ -12,6 +12,36 @@ from src.investigator.core.claude_analyzer import ClaudeAnalyzer
 from src.investigator.investigator import ClaudeInvestigator
 
 
+def is_rate_limit_error(error_msg: str) -> bool:
+    """Check if error is due to rate limiting."""
+    rate_limit_indicators = [
+        "limit",
+        "quota",
+        "rate",
+        "resets",
+        "exceeded",
+        "too many requests",
+    ]
+    error_lower = str(error_msg).lower()
+    return any(indicator in error_lower for indicator in rate_limit_indicators)
+
+
+def skip_on_rate_limit(func):
+    """Decorator to skip tests when rate limited."""
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if is_rate_limit_error(str(e)):
+                pytest.skip(f"Rate limited: {e}")
+            raise
+
+    return wrapper
+
+
 class TestClaudeAnalyzerIntegration:
     """Test ClaudeAnalyzer uses factory correctly."""
 
@@ -51,6 +81,7 @@ class TestClaudeAnalyzerIntegration:
             assert len(result) > 0
             assert "hello" in result.lower() or "world" in result.lower()
 
+    @skip_on_rate_limit
     def test_analyzer_uses_factory_with_oauth(self, tmp_path):
         """Test ClaudeAnalyzer works with OAuth authentication via factory."""
         # Setup: Check for OAuth token

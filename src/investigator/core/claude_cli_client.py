@@ -156,8 +156,13 @@ class ClaudeCLIClient:
             )
 
             # Check for non-zero exit code
+            # Note: CLI may return exit code 1 with valid JSON output (e.g., rate limits)
+            # We try to parse the output first to get a better error message
             if result.returncode != 0:
-                error_msg = result.stderr if result.stderr else "Unknown error"
+                # Try to extract error from JSON output if available
+                error_msg = self._extract_error_from_output(
+                    result.stdout, result.stderr
+                )
                 # Sanitize OAuth token from error message
                 error_msg = self._sanitize_token_from_error(error_msg)
                 msg = (
@@ -316,6 +321,47 @@ class ClaudeCLIClient:
             stop_sequence=message_data.get("stop_sequence"),
             usage=usage,
         )
+
+    def _extract_error_from_output(self, stdout: str, stderr: str) -> str:
+        """
+        Extract error message from CLI output.
+
+        Tries to parse JSON output to find error details, falls back to stderr.
+
+        Args:
+            stdout: Standard output from CLI (may contain JSON with error info)
+            stderr: Standard error from CLI
+
+        Returns:
+            Human-readable error message
+        """
+        # Try to parse JSON output for better error messages
+        if stdout and stdout.strip():
+            try:
+                response_data = json.loads(stdout)
+                if isinstance(response_data, list):
+                    # Look for result event with is_error=True
+                    for event in response_data:
+                        if isinstance(event, dict):
+                            if event.get("type") == "result" and event.get("is_error"):
+                                return event.get("result", "Unknown error")
+                            # Also check assistant message for error content
+                            if event.get("type") == "assistant":
+                                msg = event.get("message", {})
+                                content = msg.get("content", [])
+                                if content and content[0].get("type") == "text":
+                                    text = content[0].get("text", "")
+                                    # Check for rate limit or error messages
+                                    if (
+                                        "limit" in text.lower()
+                                        or "error" in text.lower()
+                                    ):
+                                        return text
+            except json.JSONDecodeError:
+                pass
+
+        # Fall back to stderr or unknown error
+        return stderr.strip() if stderr and stderr.strip() else "Unknown error"
 
     def _sanitize_token_from_error(self, error_msg: str) -> str:
         """

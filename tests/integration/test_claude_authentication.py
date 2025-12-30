@@ -28,6 +28,36 @@ from investigator.core.claude_client_factory import create_claude_client
 from investigator.core.claude_sdk_client import ClaudeSDKClient
 
 
+def is_rate_limit_error(error_msg: str) -> bool:
+    """Check if error is due to rate limiting."""
+    rate_limit_indicators = [
+        "limit",
+        "quota",
+        "rate",
+        "resets",
+        "exceeded",
+        "too many requests",
+    ]
+    error_lower = str(error_msg).lower()
+    return any(indicator in error_lower for indicator in rate_limit_indicators)
+
+
+def skip_on_rate_limit(func):
+    """Decorator to skip tests when rate limited."""
+    import functools
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            if is_rate_limit_error(str(e)):
+                pytest.skip(f"Rate limited: {e}")
+            raise
+
+    return wrapper
+
+
 class TestAPIKeyAuthentication:
     """Test API key authentication flow (backward compatibility)."""
 
@@ -98,6 +128,7 @@ class TestAPIKeyAuthentication:
 class TestOAuthAuthentication:
     """Test OAuth token authentication flow (new functionality)."""
 
+    @skip_on_rate_limit
     def test_oauth_real_request(self):
         """Test real OAuth authentication produces valid response."""
         oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv(
@@ -260,6 +291,7 @@ class TestAuthenticationFallback:
 class TestResponseCompatibility:
     """Test both auth methods produce compatible responses."""
 
+    @skip_on_rate_limit
     def test_api_key_and_oauth_responses_compatible(self):
         """Test API key and OAuth produce compatible response structures."""
         oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv(
@@ -312,6 +344,7 @@ class TestResponseCompatibility:
         assert len(oauth_response.content[0].text) > 0
         assert len(sdk_response.content[0].text) > 0
 
+    @skip_on_rate_limit
     def test_response_attributes_match(self):
         """Test both response types have same essential attributes."""
         oauth_token = os.getenv("CLAUDE_CODE_OAUTH_TOKEN") or os.getenv(
