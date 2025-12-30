@@ -236,6 +236,27 @@ class TestValidateGitHubToken:
             auth_header = headers.get("Authorization", "")
             assert auth_header == f"Bearer {valid_user_token}"
 
+    def test_fine_grained_pat_bearer_format_in_api_call(self, git_manager):
+        """Test that API call uses Bearer format for fine-grained PAT tokens."""
+        valid_pat_token = "github_pat_" + "a" * 25
+        git_manager.github_token = valid_pat_token
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"login": "testuser"}
+            mock_get.return_value = mock_response
+
+            git_manager.validate_github_token()
+
+            # Check that Bearer format is used
+            call_args = mock_get.call_args
+            headers = call_args.kwargs.get("headers") or call_args[1].get("headers")
+
+            # Should use Bearer format for fine-grained tokens
+            auth_header = headers.get("Authorization", "")
+            assert auth_header == f"Bearer {valid_pat_token}"
+
     def test_classic_token_format_in_api_call(self, git_manager):
         """Test that API call uses token format for classic tokens."""
         valid_classic_token = "ghp_" + "a" * 40
@@ -257,7 +278,20 @@ class TestValidateGitHubToken:
 
     def test_token_type_detection_priority(self, git_manager):
         """Test that github_pat_ prefix has priority over ghu_."""
-        # This tests the priority of token detection
+        # Token that starts with github_pat_ should be detected as FINE_GRAINED_PAT
+        # even if it contains ghu_ substring
+        token = "github_pat_" + "a" * 25
+        git_manager.github_token = token
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"login": "testuser"}
+            mock_get.return_value = mock_response
+
+            result = git_manager.validate_github_token()
+
+        assert result["token_type"] == GitHubTokenType.FINE_GRAINED_PAT
 
 
 class TestGitAuthentication:

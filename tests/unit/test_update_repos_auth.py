@@ -26,6 +26,7 @@ def _mock_response(status_code=200, json_data=None, headers=None):
     [
         ("ghp_" + "a" * 40, "token ghp_" + "a" * 40),
         ("ghu_" + "a" * 15, "Bearer ghu_" + "a" * 15),
+        ("github_pat_" + "a" * 25, "Bearer github_pat_" + "a" * 25),
     ],
 )
 def test_fetch_all_organization_repos_uses_expected_auth_header(token, expected_header):
@@ -44,6 +45,7 @@ def test_fetch_all_organization_repos_uses_expected_auth_header(token, expected_
     "token,expected_header",
     [
         ("ghp_" + "a" * 40, "token ghp_" + "a" * 40),
+        ("ghu_" + "a" * 15, "Bearer ghu_" + "a" * 15),
         ("github_pat_" + "a" * 25, "Bearer github_pat_" + "a" * 25),
     ],
 )

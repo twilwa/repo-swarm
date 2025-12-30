@@ -14,7 +14,8 @@ from src.investigator.core.github_diagnostics import (
 
 # Valid test tokens matching GitHub's actual format
 VALID_CLASSIC_TOKEN = "ghp_" + "a" * 40  # Classic token format
-VALID_FINEGRAINED_TOKEN = "github_pat_" + "a" * 30  # Fine-grained token format
+VALID_FINEGRAINED_USER_TOKEN = "ghu_" + "a" * 15  # Fine-grained user token format
+VALID_FINEGRAINED_PAT_TOKEN = "github_pat_" + "a" * 30  # Fine-grained PAT token format
 
 
 class TestGitHubDiagnostics:
@@ -107,7 +108,7 @@ class TestGitHubDiagnostics:
 
             mock_get.side_effect = [user_response, repo_response]
 
-            result = diagnose_github_token(VALID_FINEGRAINED_TOKEN, "owner/repo")
+            result = diagnose_github_token(VALID_FINEGRAINED_PAT_TOKEN, "owner/repo")
 
             assert result.status == DiagnosticStatus.ERROR
             assert result.issue_type == TokenIssueType.REPOSITORY_NOT_SELECTED
