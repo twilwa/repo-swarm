@@ -131,8 +131,8 @@ class TestClaudeCLIClientCommandBuilding(unittest.TestCase):
         model_index = cmd.index("--model")
         self.assertEqual(cmd[model_index + 1], model)
 
-    def test_build_command_includes_max_tokens(self):
-        """Test that command includes max-tokens parameter."""
+    def test_build_command_does_not_include_max_tokens(self):
+        """Test that command does NOT include max-tokens (not supported by Claude CLI)."""
         oauth_token = "sk-ant-oat01-test-token"
         client = ClaudeCLIClient(oauth_token=oauth_token)
 
@@ -143,9 +143,9 @@ class TestClaudeCLIClientCommandBuilding(unittest.TestCase):
             messages=[{"role": "user", "content": "test"}],
         )
 
-        self.assertIn("--max-tokens", cmd)
-        max_tokens_index = cmd.index("--max-tokens")
-        self.assertEqual(cmd[max_tokens_index + 1], str(max_tokens))
+        # Claude CLI does not support --max-tokens parameter
+        # The CLI uses model defaults for response length
+        self.assertNotIn("--max-tokens", cmd)
 
     def test_build_command_returns_list(self):
         """Test that command is returned as list suitable for subprocess."""

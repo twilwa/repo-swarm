@@ -130,7 +130,7 @@ The version field should be removed from the top only."""
 
         mock_response = Mock()
         mock_response.content = [Mock(text="Analysis result")]
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages_create.return_value = mock_response
 
         # Create analyzer with mocked factory
         with patch(
@@ -152,8 +152,8 @@ Analyze this repository: {repo_structure}"""
             self.assertEqual(result, "Analysis result")
 
             # Verify that the prompt sent to Claude doesn't contain version
-            mock_client.messages.create.assert_called_once()
-            call_args = mock_client.messages.create.call_args
+            mock_client.messages_create.assert_called_once()
+            call_args = mock_client.messages_create.call_args
             sent_prompt = call_args[1]["messages"][0]["content"]
 
             # Version line should be removed
