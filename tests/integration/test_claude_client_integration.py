@@ -149,7 +149,7 @@ class TestClaudeInvestigatorIntegration:
             clear=False,
         ):
             with pytest.raises(
-                ValueError, match="Claude.*required|authentication.*required"
+                ValueError, match="No Claude authentication credentials found"
             ):
                 ClaudeInvestigator(log_level="INFO")
 
